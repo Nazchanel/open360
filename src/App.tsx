@@ -1,26 +1,35 @@
-import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import React, { useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import JoinGroup from './components/JoinGroup';
+import CreateGroup from './components/CreateGroup';
+import PeerConnection from './components/PeerConnection';
 
-function App() {
+const App: React.FC = () => {
+  const [userName, setUserName] = useState('');
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <Router>
+      <Routes>
+        <Route path="/" element={<Navigate to="/create" />} />
+        <Route
+          path="/create"
+          element={<CreateGroup onCreate={(groupId, name) => {
+            setUserName(name);
+          }} />}
+        />
+        <Route
+          path="/join"
+          element={<JoinGroup onJoin={(groupId, name) => {
+            setUserName(name);
+          }} />}
+        />
+        <Route
+          path="/group/:groupId"
+          element={userName ? <PeerConnection userName={userName} /> : <Navigate to="/join" />}
+        />
+      </Routes>
+    </Router>
   );
-}
+};
 
 export default App;

@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
@@ -23,7 +22,6 @@ interface UserData {
   groups: string[];
 }
 
-
 interface AuthContextType {
   user: UserData | null;
   login: (username: string, password: string) => Promise<boolean>;
@@ -34,7 +32,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>(null!);
 
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null);
 
   useEffect(() => {
@@ -44,9 +42,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const docSnap = await getDoc(docRef);
         
         if (docSnap.exists()) {
-          const encryptedData = docSnap.data().encryptedData;
-          const decryptedData = decryptData(encryptedData, firebaseUser.uid);
-          setUser(decryptedData);
+          try {
+            const decryptedData = decryptData(docSnap.data().encryptedData, firebaseUser.uid);
+            if (decryptedData) {
+              setUser(decryptedData);
+            }
+          } catch (error) {
+            console.error('Decryption error:', error);
+          }
         }
       } else {
         setUser(null);
@@ -56,8 +59,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return unsubscribe;
   }, []);
 
-const login = async (username: string, password: string): Promise<boolean> => {
-      try {
+  const login = async (username: string, password: string): Promise<boolean> => {
+    try {
       const userCredential = await signInWithEmailAndPassword(
         auth,
         `${username}@open360.com`,
@@ -79,8 +82,8 @@ const login = async (username: string, password: string): Promise<boolean> => {
     }
   };
 
-const createAccount = async (username: string, password: string): Promise<boolean> => {
-      try {
+  const createAccount = async (username: string, password: string): Promise<boolean> => {
+    try {
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         `${username}@open360.com`,
@@ -114,15 +117,21 @@ const createAccount = async (username: string, password: string): Promise<boolea
   const addGroup = async (groupId: string, userId: string) => {
     if (!user) return;
     
+    // Check if user is already in the group
+    if (user.groups.includes(groupId)) return;
+    
     const updatedUser = {
       ...user,
       groups: [...user.groups, groupId]
     };
     
-    const encryptedData = encryptData(updatedUser, userId);
-    await setDoc(doc(db, 'users', userId), { encryptedData });
-    
-    setUser(updatedUser);
+    try {
+      const encryptedData = encryptData(updatedUser, userId);
+      await setDoc(doc(db, 'users', userId), { encryptedData });
+      setUser(updatedUser);
+    } catch (error) {
+      console.error('Error adding group:', error);
+    }
   };
 
   return (

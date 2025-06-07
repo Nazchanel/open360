@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useGroups } from '../hooks/useGroups';
 
@@ -26,21 +26,23 @@ const createCustomIcon = (initial: string, isCurrentUser: boolean = false) => {
   });
 };
 
-const AutoZoom = ({ location }: { location: [number, number] }) => {
+const AutoZoom = ({ locations }: { locations: [number, number][] }) => {
   const map = useMap();
 
   useEffect(() => {
-    if (location[0] !== 0 && location[1] !== 0) {
-      map.flyTo(location, 15, { duration: 1 });
+    if (locations.length > 0) {
+      const bounds = L.latLngBounds(locations);
+      map.fitBounds(bounds, { padding: [50, 50] });
     }
-  }, [location, map]);
+  }, [locations, map]);
 
   return null;
 };
 
 const GroupMap = () => {
   const { groupId } = useParams();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [position, setPosition] = useState<[number, number]>([0, 0]);
   const [locationError, setLocationError] = useState<string | null>(null);
   const { members, updateLocation, loading, joinGroup } = useGroups(groupId);
@@ -48,7 +50,6 @@ const GroupMap = () => {
   useEffect(() => {
     if (!user?.id) return;
 
-    // Join group on mount
     const join = async () => {
       await joinGroup(user.id, user.username);
     };
@@ -81,10 +82,28 @@ const GroupMap = () => {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [updateLocation]);
 
-  if (loading) return <div>Loading group data...</div>;
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
+  };
+
+  if (loading) return <div className="loading-screen">Loading group data...</div>;
+
+  const allPositions = members
+    .filter(member => member.position[0] !== 0 && member.position[1] !== 0)
+    .map(member => member.position);
 
   return (
     <div className="map-container">
+      <div className="map-controls">
+        <button onClick={() => navigate('/groups')} className="back-button">
+          ← Back to Groups
+        </button>
+        <button onClick={handleLogout} className="logout-button">
+          Logout
+        </button>
+      </div>
+      
       {locationError && (
         <div className="location-error">
           {locationError}
@@ -94,12 +113,23 @@ const GroupMap = () => {
       <div className="group-info">
         <h3>Group: {groupId}</h3>
         <div className="members-list">
+          <h4>Members ({members.length})</h4>
           {members.map((member) => (
-            <div key={member.id} className="member-item">
-              <div className={`member-icon ${member.id === user?.id ? 'you' : ''}`}>
+            <div key={member.id} className={`member-item ${member.id === user?.id ? 'you' : ''}`}>
+              <div className="member-icon">
                 {member.name?.charAt(0).toUpperCase() || '?'}
               </div>
-              <span>{member.name}{member.id === user?.id ? ' (You)' : ''}</span>
+              <div className="member-details">
+                <span className="member-name">{member.name}{member.id === user?.id ? ' (You)' : ''}</span>
+                <span className="member-status">
+                  Last updated: {new Date(member.lastUpdated).toLocaleTimeString()}
+                </span>
+                {member.position[0] !== 0 && member.position[1] !== 0 && (
+                  <span className="member-location">
+                    {member.position[0].toFixed(4)}, {member.position[1].toFixed(4)}
+                  </span>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -110,32 +140,33 @@ const GroupMap = () => {
         zoom={15}
         style={{ height: '100vh', width: '100%' }}
       >
-        <AutoZoom location={position} />
+        <AutoZoom locations={allPositions.length > 0 ? allPositions : [position]} />
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
         
-        <Marker
-          position={position}
-          icon={createCustomIcon(user?.username?.charAt(0) || 'Y', true)}
-        >
-          <Popup>You are here</Popup>
-        </Marker>
-
-        {members.filter(m => m.id !== user?.id).map((member) => (
-          <Marker
-            key={member.id}
-            position={member.position}
-            icon={createCustomIcon(member.name?.charAt(0) || '?')}
-          >
-            <Popup>
-              <div>
-                <strong>{member.name}</strong>
-                <div>Last updated: {new Date(member.lastUpdated).toLocaleTimeString()}</div>
-              </div>
-            </Popup>
-          </Marker>
+        {members.map((member) => (
+          member.position[0] !== 0 && member.position[1] !== 0 && (
+            <Marker
+              key={member.id}
+              position={member.position}
+              icon={createCustomIcon(
+                member.name?.charAt(0) || '?', 
+                member.id === user?.id
+              )}
+            >
+              <Popup>
+                <div>
+                  <strong>{member.name}</strong>
+                  <div>Last updated: {new Date(member.lastUpdated).toLocaleTimeString()}</div>
+                  <div>
+                    {member.position[0].toFixed(6)}, {member.position[1].toFixed(6)}
+                  </div>
+                </div>
+              </Popup>
+            </Marker>
+          )
         ))}
       </MapContainer>
     </div>

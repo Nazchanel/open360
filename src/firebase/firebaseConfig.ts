@@ -15,7 +15,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export { doc, setDoc, getDoc }; // Add these exports
+export { doc, setDoc, getDoc };
 export const groupsCollection = collection(db, 'groups');
 export const usersCollection = collection(db, 'users');
 
@@ -26,7 +26,11 @@ export const encryptData = (data: any, secret: string): string => {
 export const decryptData = (ciphertext: string, secret: string): any => {
   try {
     const bytes = CryptoJS.AES.decrypt(ciphertext, secret);
-    return JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
+    const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+    if (!decrypted) {
+      throw new Error('Decryption failed - empty result');
+    }
+    return JSON.parse(decrypted);
   } catch (error) {
     console.error('Decryption error:', error);
     return null;

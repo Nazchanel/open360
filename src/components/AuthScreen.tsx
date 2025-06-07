@@ -10,53 +10,55 @@ const AuthScreen = () => {
   const { login, createAccount } = useAuth();
   const navigate = useNavigate();
 
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setError('');
-  
-  try {
-    if (isLogin) {
-      const success = await login(username, password);
-      if (success) {
-        navigate('/groups');
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    
+    try {
+      if (isLogin) {
+        const success = await login(username, password);
+        if (success) {
+          navigate('/groups');
+        } else {
+          setError('Invalid username or password');
+        }
       } else {
-        setError('Invalid password');
+        if (username.length < 3) {
+          setError('Username must be at least 3 characters');
+          return;
+        }
+        if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+          setError('Username can only contain letters, numbers, and underscores');
+          return;
+        }
+        if (password.length < 6) {
+          setError('Password must be at least 6 characters');
+          return;
+        }
+        const success = await createAccount(username, password);
+        if (success) {
+          navigate('/groups');
+        }
       }
-    } else {
-      if (username.length < 3) {
-        setError('Username must be at least 3 characters');
-        return;
-      }
-      if (password.length < 6) {
-        setError('Password must be at least 6 characters');
-        return;
-      }
-      const success = await createAccount(username, password);
-      if (success) {
-        navigate('/groups');
-      }
+    } catch (error) {
+      setError('An error occurred. Please try again.');
     }
-  } catch (error) {
-    setError('An error occurred. Please try again.');
-  }
-};
+  };
 
   return (
     <div className="auth-container">
       <h2>{isLogin ? 'Login' : 'Create Account'}</h2>
       {error && <div className="error-message">{error}</div>}
       <form onSubmit={handleSubmit}>
-        {!isLogin && (
-          <div className="form-group">
-            <label>Username</label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-            />
-          </div>
-        )}
+        <div className="form-group">
+          <label>Username</label>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+          />
+        </div>
         <div className="form-group">
           <label>Password</label>
           <input

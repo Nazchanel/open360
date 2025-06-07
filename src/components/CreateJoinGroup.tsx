@@ -11,7 +11,7 @@ const CreateJoinGroup = () => {
   const [groupCode, setGroupCode] = useState('');
   const [showQR, setShowQR] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
-  const { user, addGroup } = useAuth();
+  const { user, addGroup, logout } = useAuth();
   const navigate = useNavigate();
 
   const createGroup = async () => {
@@ -52,8 +52,20 @@ const CreateJoinGroup = () => {
     setShowScanner(false);
   };
 
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
+  };
+
   return (
     <div className="group-container">
+      <div className="group-header">
+        <h2>Welcome, {user?.username}</h2>
+        <button onClick={handleLogout} className="logout-button">
+          Logout
+        </button>
+      </div>
+      
       {showScanner ? (
         <QRCodeScanner 
           onScanSuccess={handleScanSuccess}
@@ -61,8 +73,25 @@ const CreateJoinGroup = () => {
         />
       ) : (
         <>
-          <h2>Groups</h2>
-          
+          {user?.groups && user.groups.length > 0 && (
+            <div className="group-section">
+              <h3>Your Groups</h3>
+              <div className="groups-list">
+                {user.groups.map((groupId) => (
+                  <div key={groupId} className="group-item">
+                    <span>{groupId}</span>
+                    <button 
+                      onClick={() => navigate(`/group/${groupId}`)}
+                      className="primary-button small"
+                    >
+                      Open
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="group-section">
             <h3>Create New Group</h3>
             <button onClick={createGroup} className="primary-button">

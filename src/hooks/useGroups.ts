@@ -5,7 +5,8 @@ import {
   updateDoc,
   getDoc,
   arrayUnion,
-  arrayRemove
+  arrayRemove,
+  serverTimestamp
 } from 'firebase/firestore';
 import { auth, db, encryptData, decryptData } from '../firebase/firebaseConfig';
 
@@ -23,10 +24,18 @@ export const useGroups = (groupId?: string) => {
     const unsubscribe = onSnapshot(doc(db, 'groups', groupId), async (doc) => {
       if (doc.exists()) {
         const data = doc.data();
-        const decrypted = decryptData(data.encrypted, auth.currentUser?.uid || '');        
-        if (decrypted) {
-          setGroup(decrypted);
-          setMembers(decrypted.members || []);
+        try {
+          const decrypted = decryptData(data.encrypted, auth.currentUser?.uid || '');
+          if (decrypted) {
+            setGroup(decrypted);
+            // Sort members by lastUpdated (newest first)
+            const sortedMembers = [...(decrypted.members || [])].sort((a, b) => 
+              b.lastUpdated - a.lastUpdated
+            );
+            setMembers(sortedMembers);
+          }
+        } catch (error) {
+          console.error('Decryption error:', error);
         }
       }
       setLoading(false);
@@ -43,21 +52,44 @@ export const useGroups = (groupId?: string) => {
     
     if (!groupDoc.exists()) return;
     
-    const decrypted = decryptData(groupDoc.data().encrypted, auth.currentUser.uid);
-    if (!decrypted) return;
-    
-    const updatedMembers = decrypted.members.map((member: any) => 
-      member.id === auth.currentUser?.uid
-        ? { ...member, position, lastUpdated: Date.now() }
-        : member
-    );
+    try {
+      const decrypted = decryptData(groupDoc.data().encrypted, auth.currentUser.uid);
+      if (!decrypted) return;
+      
+      const existingMemberIndex = decrypted.members.findIndex(
+        (member: any) => member.id === auth.currentUser?.uid
+      );
 
-    const encrypted = encryptData({
-      ...decrypted,
-      members: updatedMembers
-    }, auth.currentUser.uid);
+      const updatedMembers = [...decrypted.members];
+      const now = Date.now();
 
-    await updateDoc(userRef, { encrypted });
+      if (existingMemberIndex >= 0) {
+        updatedMembers[existingMemberIndex] = {
+          ...updatedMembers[existingMemberIndex],
+          position,
+          lastUpdated: now
+        };
+      } else {
+        updatedMembers.push({
+          id: auth.currentUser.uid,
+          name: auth.currentUser.displayName || 'Anonymous',
+          position,
+          lastUpdated: now
+        });
+      }
+
+      const encrypted = encryptData({
+        ...decrypted,
+        members: updatedMembers
+      }, auth.currentUser.uid);
+
+      await updateDoc(userRef, { 
+        encrypted,
+        lastUpdated: serverTimestamp() 
+      });
+    } catch (error) {
+      console.error('Error updating location:', error);
+    }
   };
 
   const joinGroup = async (userId: string, username: string) => {
@@ -68,28 +100,36 @@ export const useGroups = (groupId?: string) => {
     
     if (!groupDoc.exists()) return false;
     
-    const decrypted = decryptData(groupDoc.data().encrypted, userId);
-    if (!decrypted) return false;
-    
-    if (decrypted.members.some((m: any) => m.id === userId)) return true;
-    
-    const updatedMembers = [
-      ...decrypted.members,
-      {
-        id: userId,
-        name: username,
-        position: [0, 0],
-        lastUpdated: Date.now()
-      }
-    ];
+    try {
+      const decrypted = decryptData(groupDoc.data().encrypted, userId);
+      if (!decrypted) return false;
+      
+      if (decrypted.members.some((m: any) => m.id === userId)) return true;
+      
+      const updatedMembers = [
+        ...decrypted.members,
+        {
+          id: userId,
+          name: username,
+          position: [0, 0], // Default position
+          lastUpdated: Date.now()
+        }
+      ];
 
-    const encrypted = encryptData({
-      ...decrypted,
-      members: updatedMembers
-    }, userId);
+      const encrypted = encryptData({
+        ...decrypted,
+        members: updatedMembers
+      }, userId);
 
-    await updateDoc(userRef, { encrypted });
-    return true;
+      await updateDoc(userRef, { 
+        encrypted,
+        lastUpdated: serverTimestamp()
+      });
+      return true;
+    } catch (error) {
+      console.error('Error joining group:', error);
+      return false;
+    }
   };
 
   return { group, members, loading, updateLocation, joinGroup };

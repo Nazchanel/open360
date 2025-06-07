@@ -10,12 +10,14 @@ const AuthScreen = () => {
   const { login, createAccount } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError('');
+  
+  try {
     if (isLogin) {
-      if (login(password)) {
+      const success = await login(username, password);
+      if (success) {
         navigate('/groups');
       } else {
         setError('Invalid password');
@@ -29,11 +31,15 @@ const AuthScreen = () => {
         setError('Password must be at least 6 characters');
         return;
       }
-      if (createAccount(username, password)) {
+      const success = await createAccount(username, password);
+      if (success) {
         navigate('/groups');
       }
     }
-  };
+  } catch (error) {
+    setError('An error occurred. Please try again.');
+  }
+};
 
   return (
     <div className="auth-container">

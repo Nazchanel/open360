@@ -4,13 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { usePeerConnection } from '../hooks/usePeerConnection';
-
-interface PeerData {
-  id: string;
-  username: string;
-  position: [number, number];
-}
+import { useGroups } from '../hooks/useGroups';
 
 const createCustomIcon = (initial: string, isCurrentUser: boolean = false) => {
   return L.divIcon({
@@ -49,10 +43,17 @@ const GroupMap = () => {
   const { user } = useAuth();
   const [position, setPosition] = useState<[number, number]>([0, 0]);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const { peers, sendLocation } = usePeerConnection(groupId || '', user?.username || 'Anonymous') as {
-    peers: PeerData[];
-    sendLocation: (position: [number, number]) => void;
-  };
+  const { members, updateLocation, loading, joinGroup } = useGroups(groupId);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    // Join group on mount
+    const join = async () => {
+      await joinGroup(user.id, user.username);
+    };
+    join();
+  }, [groupId, user]);
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -62,9 +63,12 @@ const GroupMap = () => {
 
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        const newPos: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+        const newPos: [number, number] = [
+          pos.coords.latitude,
+          pos.coords.longitude,
+        ];
         setPosition(newPos);
-        sendLocation(newPos);
+        updateLocation(newPos);
         setLocationError(null);
       },
       (err) => {
@@ -75,7 +79,9 @@ const GroupMap = () => {
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [sendLocation]);
+  }, [updateLocation]);
+
+  if (loading) return <div>Loading group data...</div>;
 
   return (
     <div className="map-container">
@@ -88,12 +94,12 @@ const GroupMap = () => {
       <div className="group-info">
         <h3>Group: {groupId}</h3>
         <div className="members-list">
-          {peers.map(peer => (
-            <div key={peer.id} className="member-item">
-              <div className={`member-icon ${peer.id === user?.id ? 'you' : ''}`}>
-                {peer.username?.charAt(0).toUpperCase() || '?'}
+          {members.map((member) => (
+            <div key={member.id} className="member-item">
+              <div className={`member-icon ${member.id === user?.id ? 'you' : ''}`}>
+                {member.name?.charAt(0).toUpperCase() || '?'}
               </div>
-              <span>{peer.username}{peer.id === user?.id ? ' (You)' : ''}</span>
+              <span>{member.name}{member.id === user?.id ? ' (You)' : ''}</span>
             </div>
           ))}
         </div>
@@ -117,16 +123,16 @@ const GroupMap = () => {
           <Popup>You are here</Popup>
         </Marker>
 
-        {peers.map((peer) => (
+        {members.filter(m => m.id !== user?.id).map((member) => (
           <Marker
-            key={peer.id}
-            position={peer.position}
-            icon={createCustomIcon(peer.username?.charAt(0) || '?')}
+            key={member.id}
+            position={member.position}
+            icon={createCustomIcon(member.name?.charAt(0) || '?')}
           >
             <Popup>
               <div>
-                <strong>{peer.username}</strong>
-                <div>Last updated: {new Date().toLocaleTimeString()}</div>
+                <strong>{member.name}</strong>
+                <div>Last updated: {new Date(member.lastUpdated).toLocaleTimeString()}</div>
               </div>
             </Popup>
           </Marker>

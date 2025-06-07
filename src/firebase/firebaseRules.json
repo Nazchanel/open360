@@ -1,0 +1,20 @@
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "groups": {
+      "$groupId": {
+        ".read": "auth != null && 
+                 (data.child('encrypted').exists() || 
+                  root.child('users').child(auth.uid).child('groups').hasChild($groupId))",
+        ".write": "auth != null && 
+                  (data.child('encrypted').exists() || 
+                   root.child('users').child(auth.uid).child('groups').hasChild($groupId))"
+      }
+    }
+  }
+}

@@ -4,27 +4,47 @@ import { useAuth } from '../context/AuthContext';
 import { generateGroupCode } from '../utils/generateCode';
 import { QRCodeSVG as QRCode } from 'qrcode.react';
 import QRCodeScanner from './QRCodeScanner';
+import { doc, setDoc } from 'firebase/firestore';
+import { db, encryptData } from '../firebase/firebaseConfig';
 
 const CreateJoinGroup = () => {
   const [groupCode, setGroupCode] = useState('');
   const [showQR, setShowQR] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
-  const [password, setPassword] = useState('');
   const { user, addGroup } = useAuth();
   const navigate = useNavigate();
 
-  const createGroup = () => {
+  const createGroup = async () => {
+    if (!user) return;
+    
     const code = generateGroupCode();
+    const encrypted = encryptData({
+      id: code,
+      name: `Group ${code}`,
+      creatorId: user.id,
+      members: [{
+        id: user.id,
+        name: user.username,
+        position: [0, 0],
+        lastUpdated: Date.now()
+      }]
+    }, user.id);
+
+    await setDoc(doc(db, 'groups', code), { encrypted });
+    await addGroup(code, user.id);
     setGroupCode(code);
     setShowQR(true);
   };
 
-  const joinGroup = () => {
-    if (!groupCode) return;
-    if (password && user) {
-      addGroup(groupCode, password);
+  const joinGroup = async () => {
+    if (!groupCode || !user) return;
+    
+    try {
+      await addGroup(groupCode, user.id);
+      navigate(`/group/${groupCode}`);
+    } catch (error) {
+      console.error('Error joining group:', error);
     }
-    navigate(`/group/${groupCode}`);
   };
 
   const handleScanSuccess = (code: string) => {
@@ -78,14 +98,6 @@ const CreateJoinGroup = () => {
                 value={groupCode}
                 onChange={(e) => setGroupCode(e.target.value)}
               />
-              {user && (
-                <input
-                  type="password"
-                  placeholder="Your Password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              )}
               <button 
                 onClick={joinGroup}
                 className="primary-button"

@@ -7,6 +7,8 @@ import QRCodeScanner from './QRCodeScanner';
 import { doc, setDoc } from 'firebase/firestore';
 import { db, encryptData } from '../firebase/firebaseConfig';
 
+const secretKey = process.env.REACT_APP_GROUP_SECRET_KEY || '';
+
 const CreateJoinGroup = () => {
   const [groupCode, setGroupCode] = useState('');
   const [showQR, setShowQR] = useState(false);
@@ -28,7 +30,7 @@ const CreateJoinGroup = () => {
         position: [0, 0],
         lastUpdated: Date.now()
       }]
-    }, user.id);
+    }, secretKey);
 
     await setDoc(doc(db, 'groups', code), { encrypted });
     await addGroup(code, user.id);

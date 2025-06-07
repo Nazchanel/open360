@@ -31,6 +31,7 @@ const AutoZoom = ({ locations }: { locations: [number, number][] }) => {
 
   useEffect(() => {
     if (locations.length > 0) {
+      
       const bounds = L.latLngBounds(locations);
       map.fitBounds(bounds, { padding: [50, 50] });
     }
@@ -47,6 +48,10 @@ const GroupMap = () => {
   const [locationError, setLocationError] = useState<string | null>(null);
   const { members, updateLocation, loading, joinGroup } = useGroups(groupId);
 
+  useEffect(() => {
+      console.log('Group members:', members);
+    }, [members]);
+    
   useEffect(() => {
     if (!user?.id) return;
 

@@ -10,6 +10,8 @@ import {
 } from 'firebase/firestore';
 import { auth, db, encryptData, decryptData } from '../firebase/firebaseConfig';
 
+const GROUP_SECRET_KEY = process.env.REACT_APP_GROUP_SECRET_KEY || 'default_secret_key';
+
 export const useGroups = (groupId?: string) => {
   const [group, setGroup] = useState<any>(null);
   const [members, setMembers] = useState<any[]>([]);
@@ -25,7 +27,7 @@ export const useGroups = (groupId?: string) => {
       if (doc.exists()) {
         const data = doc.data();
         try {
-          const decrypted = decryptData(data.encrypted, auth.currentUser?.uid || '');
+          const decrypted = decryptData(data.encrypted, GROUP_SECRET_KEY);
           if (decrypted) {
             setGroup(decrypted);
             // Sort members by lastUpdated (newest first)
@@ -53,7 +55,8 @@ export const useGroups = (groupId?: string) => {
     if (!groupDoc.exists()) return;
     
     try {
-      const decrypted = decryptData(groupDoc.data().encrypted, auth.currentUser.uid);
+      const decrypted = decryptData(groupDoc.data().encrypted, GROUP_SECRET_KEY);
+
       if (!decrypted) return;
       
       const existingMemberIndex = decrypted.members.findIndex(
@@ -81,7 +84,7 @@ export const useGroups = (groupId?: string) => {
       const encrypted = encryptData({
         ...decrypted,
         members: updatedMembers
-      }, auth.currentUser.uid);
+      }, GROUP_SECRET_KEY);
 
       await updateDoc(userRef, { 
         encrypted,
@@ -101,7 +104,7 @@ export const useGroups = (groupId?: string) => {
     if (!groupDoc.exists()) return false;
     
     try {
-      const decrypted = decryptData(groupDoc.data().encrypted, userId);
+      const decrypted = decryptData(groupDoc.data().encrypted, GROUP_SECRET_KEY);
       if (!decrypted) return false;
       
       if (decrypted.members.some((m: any) => m.id === userId)) return true;
@@ -119,7 +122,7 @@ export const useGroups = (groupId?: string) => {
       const encrypted = encryptData({
         ...decrypted,
         members: updatedMembers
-      }, userId);
+      }, GROUP_SECRET_KEY);
 
       await updateDoc(userRef, { 
         encrypted,

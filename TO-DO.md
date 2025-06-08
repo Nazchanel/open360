@@ -14,5 +14,5 @@
     - Allow for manually toggling but set the system theme as the default
 10. Ensure complete encryption, following are not currently encrypted and can be visible to Firebase admin
     - Group Code (currently static, with no restrictions)
-    - Username (username@open360.come)
+    - Username (username@open360.com)
 10. Implement in React Native to deploy as app

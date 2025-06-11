@@ -1,8 +1,6 @@
 .env
 package-lock.json
 .bundle
-android
-ios
 __tests__
 
 # OSX

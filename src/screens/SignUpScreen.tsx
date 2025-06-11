@@ -1,101 +1,88 @@
 import React, { useState } from 'react';
 import {
   SafeAreaView,
-  View,
   Text,
   TextInput,
   Button,
-  StyleSheet,
   Alert,
+  StyleSheet,
   useColorScheme,
-  ScrollView,
 } from 'react-native';
+import auth from '@react-native-firebase/auth';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SignUp'>;
 
 const SignUpScreen: React.FC<Props> = ({ navigation }) => {
-  const isDarkMode = useColorScheme() === 'dark';
-
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const isDarkMode = useColorScheme() === 'dark';
 
   const styles = createStyles(isDarkMode);
 
-  const handleSignUp = () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please fill out all fields');
-      return;
+  const handleSignUp = async () => {
+    try {
+      await auth().createUserWithEmailAndPassword(email, password);
+      Alert.alert('Success', 'Account created!');
+      navigation.navigate('Login');
+    } catch (error: any) {
+      let message = 'Signup failed';
+      if (error.code === 'auth/email-already-in-use') message = 'Email already in use';
+      if (error.code === 'auth/invalid-email') message = 'Invalid email';
+      if (error.code === 'auth/weak-password') message = 'Password too weak';
+      Alert.alert('Error', message);
     }
-    // Dummy signup success
-    Alert.alert('Success', `Welcome!`);
-    navigation.goBack();
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <Text style={styles.title}>Sign Up</Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor={isDarkMode ? '#aaa' : '#555'}
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          returnKeyType="next"
-        />
-
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor={isDarkMode ? '#aaa' : '#555'}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          returnKeyType="done"
-        />
-
-        <View style={styles.buttonContainer}>
-          <Button title="Sign Up" onPress={handleSignUp} />
-        </View>
-      </ScrollView>
+      <Text style={styles.title}>Sign Up</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Email"
+        placeholderTextColor={isDarkMode ? '#aaa' : '#555'}
+        value={email}
+        onChangeText={setEmail}
+        keyboardType="email-address"
+        autoCapitalize="none"
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Password"
+        placeholderTextColor={isDarkMode ? '#aaa' : '#555'}
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+      />
+      <Button title="Sign Up" onPress={handleSignUp} />
     </SafeAreaView>
   );
 };
 
-const createStyles = (isDarkMode: boolean) =>
+const createStyles = (dark: boolean) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDarkMode ? '#000' : '#fff',
-    },
-    scrollContainer: {
       padding: 20,
       justifyContent: 'center',
-      flexGrow: 1,
+      backgroundColor: dark ? '#000' : '#fff',
     },
     title: {
       fontSize: 28,
       marginBottom: 20,
       textAlign: 'center',
-      color: isDarkMode ? '#fff' : '#000',
+      color: dark ? '#fff' : '#000',
     },
     input: {
       height: 50,
-      borderColor: isDarkMode ? '#444' : '#ccc',
+      borderColor: dark ? '#444' : '#ccc',
       borderWidth: 1,
       paddingHorizontal: 12,
       marginBottom: 15,
       borderRadius: 8,
-      color: isDarkMode ? '#fff' : '#000',
-      backgroundColor: isDarkMode ? '#1c1c1e' : '#f9f9f9',
-    },
-    buttonContainer: {
-      marginTop: 10,
+      color: dark ? '#fff' : '#000',
+      backgroundColor: dark ? '#1c1c1e' : '#f9f9f9',
     },
   });
 

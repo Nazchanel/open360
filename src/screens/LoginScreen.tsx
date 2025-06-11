@@ -10,6 +10,7 @@ import {
   useColorScheme,
   TouchableOpacity,
 } from 'react-native';
+import auth from '@react-native-firebase/auth';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 
@@ -22,19 +23,23 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
 
   const styles = createStyles(isDarkMode);
 
-  const handleSubmit = () => {
-    if (!email || !password) {
-      Alert.alert('Validation Error', 'Please fill out all fields.');
-      return;
+  const handleLogin = async () => {
+    try {
+      await auth().signInWithEmailAndPassword(email, password);
+      // Alert.alert('Success', 'Logged in!');
+      navigation.replace('Dashboard');
+    } catch (error: any) {
+      let message = 'Login failed';
+      if (error.code === 'auth/invalid-email') message = 'Invalid email address';
+      if (error.code === 'auth/user-not-found') message = 'No user found';
+      if (error.code === 'auth/wrong-password') message = 'Incorrect password';
+      Alert.alert('Error', message);
     }
-
-    Alert.alert('Login Successful', `Email: ${email}`);
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>Login</Text>
-
       <TextInput
         style={styles.input}
         placeholder="Email"
@@ -44,7 +49,6 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
         keyboardType="email-address"
         autoCapitalize="none"
       />
-
       <TextInput
         style={styles.input}
         placeholder="Password"
@@ -53,11 +57,7 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
         onChangeText={setPassword}
         secureTextEntry
       />
-
-      <View style={styles.buttonContainer}>
-        <Button title="Login" onPress={handleSubmit} />
-      </View>
-
+      <Button title="Login" onPress={handleLogin} />
       <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
         <Text style={styles.link}>Don't have an account? Sign Up</Text>
       </TouchableOpacity>
@@ -65,36 +65,33 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
   );
 };
 
-const createStyles = (isDarkMode: boolean) =>
+const createStyles = (dark: boolean) =>
   StyleSheet.create({
     container: {
       flex: 1,
       padding: 20,
       justifyContent: 'center',
-      backgroundColor: isDarkMode ? '#000' : '#fff',
+      backgroundColor: dark ? '#000' : '#fff',
     },
     title: {
       fontSize: 28,
       marginBottom: 20,
       textAlign: 'center',
-      color: isDarkMode ? '#fff' : '#000',
+      color: dark ? '#fff' : '#000',
     },
     input: {
       height: 50,
-      borderColor: isDarkMode ? '#444' : '#ccc',
+      borderColor: dark ? '#444' : '#ccc',
       borderWidth: 1,
       paddingHorizontal: 12,
       marginBottom: 15,
       borderRadius: 8,
-      color: isDarkMode ? '#fff' : '#000',
-      backgroundColor: isDarkMode ? '#1c1c1e' : '#f9f9f9',
-    },
-    buttonContainer: {
-      marginTop: 10,
+      color: dark ? '#fff' : '#000',
+      backgroundColor: dark ? '#1c1c1e' : '#f9f9f9',
     },
     link: {
       marginTop: 15,
-      color: isDarkMode ? '#4da6ff' : '#0066cc',
+      color: dark ? '#4da6ff' : '#0066cc',
       textAlign: 'center',
     },
   });

@@ -11,17 +11,17 @@ import {
 import auth from '@react-native-firebase/auth';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
-
 type Props = NativeStackScreenProps<RootStackParamList, 'SignUp'>;
 
 const SignUpScreen: React.FC<Props> = ({ navigation }) => {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const isDarkMode = useColorScheme() === 'dark';
 
   const styles = createStyles(isDarkMode);
 
   const handleSignUp = async () => {
+    const email = username + "@open360.com";
     try {
       await auth().createUserWithEmailAndPassword(email, password);
       Alert.alert('Success', 'Account created!');
@@ -40,10 +40,10 @@ const SignUpScreen: React.FC<Props> = ({ navigation }) => {
       <Text style={styles.title}>Sign Up</Text>
       <TextInput
         style={styles.input}
-        placeholder="Email"
+        placeholder="Username"
         placeholderTextColor={isDarkMode ? '#aaa' : '#555'}
-        value={email}
-        onChangeText={setEmail}
+        value={username}
+        onChangeText={setUsername}
         keyboardType="email-address"
         autoCapitalize="none"
       />

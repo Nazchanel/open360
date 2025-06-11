@@ -19,34 +19,8 @@ import type { RootStackParamList } from '../../App'; // adjust this path as need
 const DashboardScreen = () => {
   const isDark = useColorScheme() === 'dark';
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
   const [groupCode, setGroupCode] = React.useState('');
-
-  // Utility to generate a 6-letter uppercase code
-  const generateRandomCode = (): string => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    let result = '';
-    for (let i = 0; i < 6; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-  };
-
-const createGroup = async () => {
-  const code = generateRandomCode();
-  try {
-    await firestore()
-      .collection('groups')
-      .doc(code)
-      .set({
-        createdAt: firestore.FieldValue.serverTimestamp(),
-      });
-    Alert.alert('Success', `Group "${code}" created`);
-  } catch (error) {
-    console.error(error);
-    Alert.alert('Error', 'Failed to create group');
-  }
-};
-
 
   const handleTextChange = (text: string) => {
     const formatted = text.replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 6);
@@ -56,6 +30,45 @@ const createGroup = async () => {
   const handleLogout = async () => {
     await auth().signOut();
     navigation.replace('Login');
+  };
+
+  // Function to generate random 6-letter uppercase code
+  const generateRandomCode = () => {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+      code += letters.charAt(Math.floor(Math.random() * letters.length));
+    }
+    return code;
+  };
+
+  // Handle Create button press
+  const handleCreateGroup = async () => {
+    const currentUser = auth().currentUser;
+    if (!currentUser) {
+      Alert.alert('Error', 'You must be logged in to create a group.');
+      return;
+    }
+    const userId = currentUser.uid;
+    const emailUsername = currentUser?.email ? currentUser.email.split('@')[0]: 'anon';
+
+    const newGroupCode = generateRandomCode();
+
+    try {
+      await firestore()
+        .collection('groups')
+        .doc(newGroupCode)
+        .set({
+          createdAt: firestore.FieldValue.serverTimestamp(),
+          createdBy: currentUser.uid,
+          createdByName: emailUsername
+        });
+
+      Alert.alert('Success', `Group created with code: ${newGroupCode}`);
+    } catch (error) {
+      console.error('Error creating group:', error);
+      Alert.alert('Error', 'Failed to create group.');
+    }
   };
 
   const themeStyles = isDark ? darkTheme : lightTheme;
@@ -68,7 +81,10 @@ const createGroup = async () => {
       {/* Top: Create Group Box */}
       <View style={[styles.box, themeStyles.box]}>
         <Text style={[styles.title, themeStyles.title]}>Create Group</Text>
-        <TouchableOpacity style={[styles.button, themeStyles.button]} onPress={createGroup}>
+        <TouchableOpacity
+          style={[styles.button, themeStyles.button]}
+          onPress={handleCreateGroup}
+        >
           <Text style={[styles.buttonText, themeStyles.buttonText]}>Create</Text>
         </TouchableOpacity>
       </View>
@@ -88,7 +104,7 @@ const createGroup = async () => {
       </View>
 
       {/* Logout Button */}
-      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+      <TouchableOpacity style={[styles.logoutBtn]} onPress={handleLogout}>
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
     </KeyboardAvoidingView>

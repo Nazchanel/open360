@@ -17,13 +17,14 @@ import { RootStackParamList } from '../../App';
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 const LoginScreen: React.FC<Props> = ({ navigation }) => {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const isDarkMode = useColorScheme() === 'dark';
 
   const styles = createStyles(isDarkMode);
 
   const handleLogin = async () => {
+    const email = username + "@open360.com";
     try {
       await auth().signInWithEmailAndPassword(email, password);
       // Alert.alert('Success', 'Logged in!');
@@ -42,10 +43,10 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
       <Text style={styles.title}>Login</Text>
       <TextInput
         style={styles.input}
-        placeholder="Email"
+        placeholder="Username"
         placeholderTextColor={isDarkMode ? '#aaa' : '#555'}
-        value={email}
-        onChangeText={setEmail}
+        value={username}
+        onChangeText={setUsername}
         keyboardType="email-address"
         autoCapitalize="none"
       />

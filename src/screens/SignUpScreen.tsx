@@ -27,7 +27,8 @@ const SignUpScreen: React.FC<Props> = ({ navigation }) => {
       await auth().createUserWithEmailAndPassword(email, password);
       await firestore()
   .collection('users')
-  .doc(username)
+  // In Firebase the username is stored as all lowercase, so defaults to that to prevent consistency issues
+  .doc(username.toLowerCase())
   .set({
     groups:[]
   })

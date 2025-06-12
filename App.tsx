@@ -13,7 +13,11 @@ export type RootStackParamList = {
   Login: undefined;
   SignUp: undefined;
   Dashboard: undefined;
-  Map: {username : string; groupName : string}
+  Map: {
+    username: string;
+    groupName: string;
+    members: string[];
+  };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();

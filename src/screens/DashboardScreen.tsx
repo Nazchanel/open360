@@ -16,7 +16,6 @@ import firestore from '@react-native-firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../App';
-import { DocumentSnapshot } from 'firebase/firestore';
 
 const DashboardScreen = () => {
   const isDark = useColorScheme() === 'dark';
@@ -65,6 +64,25 @@ const DashboardScreen = () => {
     return code;
   };
   
+  // Returns an array of group members given a group (Array Implementation without roles)
+  async function getGroupMembers(group : string): Promise<string[] | undefined> {
+    const currentUser = auth().currentUser;
+    if (!currentUser) {
+      Alert.alert('Error', 'You must be logged in to create a group.');
+      return;
+    }
+    const docSnapshot = await firestore()
+    .collection('groups')
+    .doc(group)
+    .get();
+    
+    const members = docSnapshot.get('members');
+    if (Array.isArray(members)) {
+      return members as string[];
+    }
+    
+    return undefined;
+  } 
   
   // Handle Join Button Press
   const handleJoinGroup = async () => {
@@ -86,10 +104,10 @@ const DashboardScreen = () => {
         Alert.alert('Error', 'Group does not exist');
         return;
       }
-
+      
       const groupData = documentSnapshot.data();
       const members: string[] = groupData?.members ?? [];
-
+      
       if (members.includes(name)) {
         Alert.alert('Info', 'You are already a member of this group.');
         return; // Stop here, no need to add again
@@ -105,7 +123,7 @@ const DashboardScreen = () => {
       });
       
       await addGroupToUser(groupCode);
-
+      
       fetchUserGroups();
       
       // You might want to show a success message or navigate here
@@ -193,7 +211,7 @@ const DashboardScreen = () => {
       
       await addGroupToUser(newGroupCode);
       fetchUserGroups();
- 
+      
     } catch (error) {
       console.error('Error creating group:', error);
       Alert.alert('Error', 'Failed to create group.');
@@ -210,7 +228,7 @@ const DashboardScreen = () => {
     behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
     <ScrollView
-    contentContainerStyle={{ paddingBottom: 80 }} // allows scrolling beyond keyboard
+    contentContainerStyle={{ paddingBottom: 90 }} // allows scrolling beyond keyboard
     keyboardShouldPersistTaps="handled"
     >
     {/* Header Row */}
@@ -243,22 +261,36 @@ const DashboardScreen = () => {
     {userGroups.length > 0 && (
       <View style={[styles.box, themeStyles.box]}>
       <Text style={[styles.title, themeStyles.title]}>Available Groups</Text>
-      <ScrollView style={{ maxHeight: 200 }}>
+      <ScrollView
+      style={userGroups.length > 3 ? { maxHeight: 180 } : undefined} // ~60 per item * 3 = 180px max height
+      nestedScrollEnabled={true} // ensures scrolling works inside parent ScrollView on Android
+      >
       {userGroups.map((group, index) => (
-        <TouchableOpacity
-        key={index}
-        style={styles.joinButton}
-        onPress={() => navigation.navigate('Map', {
-        username: auth().currentUser?.email?.split('@')[0] || 'User',
-        groupName: group, // optional, if you want to show/use this
-        })}
-        >
-        <Text style={styles.joinButtonText}>{group}</Text>
-        </TouchableOpacity>
-      ))}
+  <TouchableOpacity
+    key={index}
+    style={styles.joinButton}
+    onPress={async () => {
+      try {
+        const members = await getGroupMembers(group);
+        navigation.navigate('Map', {
+          username: auth().currentUser?.email?.split('@')[0] || 'User',
+          groupName: group,
+          members: members ?? [],
+        });
+      } catch (error) {
+        console.error('Failed to fetch members:', error);
+        Alert.alert('Error', 'Unable to fetch group members.');
+      }
+    }}
+  >
+    <Text style={styles.joinButtonText}>{group}</Text>
+  </TouchableOpacity>
+))}
+
       </ScrollView>
       </View>
     )}
+    
     
     
     {/* Join Group Box */}

@@ -12,6 +12,7 @@ import auth from '@react-native-firebase/auth';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../App';
 type Props = NativeStackScreenProps<RootStackParamList, 'SignUp'>;
+import firestore from '@react-native-firebase/firestore';
 
 const SignUpScreen: React.FC<Props> = ({ navigation }) => {
   const [username, setUsername] = useState('');
@@ -24,6 +25,15 @@ const SignUpScreen: React.FC<Props> = ({ navigation }) => {
     const email = username + "@open360.com";
     try {
       await auth().createUserWithEmailAndPassword(email, password);
+      await firestore()
+  .collection('users')
+  .doc(username)
+  .set({
+    groups:[]
+  })
+  .then(() => {
+    console.log('User added!');
+  });
       Alert.alert('Success', 'Account created!');
       navigation.navigate('Login');
     } catch (error: any) {

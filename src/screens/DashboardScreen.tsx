@@ -16,12 +16,34 @@ import firestore from '@react-native-firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../App';
+import { DocumentSnapshot } from 'firebase/firestore';
 
 const DashboardScreen = () => {
   const isDark = useColorScheme() === 'dark';
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   
   const [groupCode, setGroupCode] = React.useState('');
+  const [userGroups, setUserGroups] = React.useState<string[]>([]);
+  
+  React.useEffect(() => {
+    fetchUserGroups();
+  }, []);
+  
+  
+  const fetchUserGroups = () => {
+    getUserGroups()
+    .then(groups => {
+      if (groups && Array.isArray(groups)) {
+        setUserGroups(groups);
+      } else {
+        setUserGroups([]);
+      }
+    })
+    .catch(error => {
+      console.error('Error fetching user groups:', error);
+      setUserGroups([]);
+    });
+  };
   
   const handleTextChange = (text: string) => {
     const formatted = text.replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 6);
@@ -43,6 +65,7 @@ const DashboardScreen = () => {
     return code;
   };
   
+  
   // Handle Join Button Press
   const handleJoinGroup = async () => {
     const currentUser = auth().currentUser;
@@ -63,6 +86,14 @@ const DashboardScreen = () => {
         Alert.alert('Error', 'Group does not exist');
         return;
       }
+
+      const groupData = documentSnapshot.data();
+      const members: string[] = groupData?.members ?? [];
+
+      if (members.includes(name)) {
+        Alert.alert('Info', 'You are already a member of this group.');
+        return; // Stop here, no need to add again
+      }
       
       console.log('Group data:', documentSnapshot.data());
       
@@ -73,6 +104,10 @@ const DashboardScreen = () => {
         [`roles.${name}`]: 'member',
       });
       
+      await addGroupToUser(groupCode);
+
+      fetchUserGroups();
+      
       // You might want to show a success message or navigate here
       Alert.alert('Success', 'You have joined the group!');
     } catch (error) {
@@ -80,6 +115,52 @@ const DashboardScreen = () => {
       Alert.alert('Error', 'An error occurred while trying to join the group.');
     }
   };
+  const addGroupToUser = async (code : string) => {
+    const currentUser = auth().currentUser;
+    if (!currentUser) {
+      Alert.alert('Error', 'You must be logged in to create a group.');
+      return;
+    }
+    const emailUsername = currentUser?.email ? currentUser.email.split('@')[0]: 'anon';
+    
+    try {
+      await firestore()
+      .collection('users')
+      .doc(emailUsername)
+      .set(
+        {
+          groups: firestore.FieldValue.arrayUnion(code),
+        },
+        { merge: true }
+      );
+      
+      
+    } catch (error) {
+      console.error('Error creating group:', error);
+      Alert.alert('Error', 'Failed to create group.');
+    }
+    
+  };
+  
+  async function getUserGroups(): Promise<string[] | undefined> {
+    const currentUser = auth().currentUser;
+    if (!currentUser) {
+      Alert.alert('Error', 'You must be logged in to create a group.');
+      return;
+    }
+    const username = currentUser?.email ? currentUser.email.split('@')[0]: 'anon';
+    const docSnapshot = await firestore()
+    .collection('users')
+    .doc(username)
+    .get();
+    
+    const groups = docSnapshot.get('groups');
+    if (Array.isArray(groups)) {
+      return groups as string[];
+    }
+    
+    return undefined;
+  }
   
   // Handle Create button press
   const handleCreateGroup = async () => {
@@ -105,7 +186,14 @@ const DashboardScreen = () => {
         roles:{[emailUsername]:"admin"}
       });
       
+      // Add group to users collection for current user
+      
+      
       Alert.alert('Success', `Group created with code: ${newGroupCode}`);
+      
+      await addGroupToUser(newGroupCode);
+      fetchUserGroups();
+ 
     } catch (error) {
       console.error('Error creating group:', error);
       Alert.alert('Error', 'Failed to create group.');
@@ -125,7 +213,7 @@ const DashboardScreen = () => {
     contentContainerStyle={{ paddingBottom: 80 }} // allows scrolling beyond keyboard
     keyboardShouldPersistTaps="handled"
     >
-    {/* 🔝 Header Row */}
+    {/* Header Row */}
     <View style={styles.headerContainer}>
     <Text style={[styles.header, themeStyles.title]}>
     Hello, {auth().currentUser?.email?.split('@')[0] || 'User'}
@@ -151,17 +239,24 @@ const DashboardScreen = () => {
     </TouchableOpacity>
     </View>
     
-    {/* Available Groups Box */}
-    <View style={[styles.box, themeStyles.box]}>
-    <Text style={[styles.title, themeStyles.title]}>Available Groups</Text>
-    <ScrollView style={{ maxHeight: 200 }}>
-    {['Group A', 'Group B', 'Group C'].map((group, index) => (
-      <TouchableOpacity key={index} style={styles.joinButton} onPress={() => console.log(`Pressed ${group}`)}>
-      <Text style={styles.joinButtonText}>{group}</Text>
-      </TouchableOpacity>
-    ))}
-    </ScrollView>
-    </View>
+    {/* Available Groups Box (conditionally rendered) */}
+    {userGroups.length > 0 && (
+      <View style={[styles.box, themeStyles.box]}>
+      <Text style={[styles.title, themeStyles.title]}>Available Groups</Text>
+      <ScrollView style={{ maxHeight: 200 }}>
+      {userGroups.map((group, index) => (
+        <TouchableOpacity
+        key={index}
+        style={styles.joinButton}
+        onPress={() => console.log(`Pressed ${group}`)}
+        >
+        <Text style={styles.joinButtonText}>{group}</Text>
+        </TouchableOpacity>
+      ))}
+      </ScrollView>
+      </View>
+    )}
+    
     
     {/* Join Group Box */}
     <View style={[styles.box, themeStyles.box]}>

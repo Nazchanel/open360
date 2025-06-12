@@ -9,8 +9,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ScrollView
 } from 'react-native';
-import auth from '@react-native-firebase/auth';
+import auth, { firebase } from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -19,19 +20,19 @@ import type { RootStackParamList } from '../../App'; // adjust this path as need
 const DashboardScreen = () => {
   const isDark = useColorScheme() === 'dark';
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-
+  
   const [groupCode, setGroupCode] = React.useState('');
-
+  
   const handleTextChange = (text: string) => {
     const formatted = text.replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 6);
     setGroupCode(formatted);
   };
-
+  
   const handleLogout = async () => {
     await auth().signOut();
     navigation.replace('Login');
   };
-
+  
   // Function to generate random 6-letter uppercase code
   const generateRandomCode = () => {
     const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -41,7 +42,45 @@ const DashboardScreen = () => {
     }
     return code;
   };
-
+  
+  // Handle Join Button Press
+  const handleJoinGroup = async () => {
+    const currentUser = auth().currentUser;
+    const name = currentUser?.email ? currentUser.email.split('@')[0] : 'anon';
+    
+    if (!currentUser) {
+      Alert.alert('Error', 'You must be logged in to join a group.');
+      return;
+    }
+    
+    try {
+      const documentSnapshot = await firestore()
+      .collection('groups')
+      .doc(groupCode)
+      .get();
+      
+      if (documentSnapshot.data() === undefined) {
+        Alert.alert('Error', 'Group does not exist');
+        return; // 🚨 Exit to prevent running the rest of the code
+      }
+      
+      console.log('Group data:', documentSnapshot.data());
+      
+      await firestore()
+      .doc(`groups/${groupCode}`)
+      .update({
+        members: firestore.FieldValue.arrayUnion(name),
+        [`roles.${name}`]: 'member',
+      });
+      
+      // You might want to show a success message or navigate here
+      Alert.alert('Success', 'You have joined the group!');
+    } catch (error) {
+      console.error('Error joining group:', error);
+      Alert.alert('Error', 'An error occurred while trying to join the group.');
+    }
+  };
+  
   // Handle Create button press
   const handleCreateGroup = async () => {
     const currentUser = auth().currentUser;
@@ -51,62 +90,67 @@ const DashboardScreen = () => {
     }
     const userId = currentUser.uid;
     const emailUsername = currentUser?.email ? currentUser.email.split('@')[0]: 'anon';
-
+    
     const newGroupCode = generateRandomCode();
-
+    
     try {
       await firestore()
-        .collection('groups')
-        .doc(newGroupCode)
-        .set({
-          createdAt: firestore.FieldValue.serverTimestamp(),
-          createdBy: currentUser.uid,
-          createdByName: emailUsername
-        });
-
+      .collection('groups')
+      .doc(newGroupCode)
+      .set({
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        createdBy: userId,
+        createdByName: emailUsername,
+        members:[emailUsername],
+        roles:{[emailUsername]:"admin"}
+      });
+      
       Alert.alert('Success', `Group created with code: ${newGroupCode}`);
     } catch (error) {
       console.error('Error creating group:', error);
       Alert.alert('Error', 'Failed to create group.');
     }
   };
-
+  
   const themeStyles = isDark ? darkTheme : lightTheme;
-
+  
   return (
     <KeyboardAvoidingView
-      style={[styles.container, themeStyles.container]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    style={[styles.container, themeStyles.container]}
+    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {/* Top: Create Group Box */}
-      <View style={[styles.box, themeStyles.box]}>
-        <Text style={[styles.title, themeStyles.title]}>Create Group</Text>
-        <TouchableOpacity
-          style={[styles.button, themeStyles.button]}
-          onPress={handleCreateGroup}
-        >
-          <Text style={[styles.buttonText, themeStyles.buttonText]}>Create</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Bottom: Join Group Input */}
-      <View style={styles.joinContainer}>
-        <Text style={[styles.label, themeStyles.label]}>Join Group</Text>
-        <TextInput
-          style={[styles.input, themeStyles.input]}
-          value={groupCode}
-          onChangeText={handleTextChange}
-          maxLength={6}
-          autoCapitalize="characters"
-          placeholder="ABCDEF"
-          placeholderTextColor={isDark ? '#888' : '#aaa'}
-        />
-      </View>
-
-      {/* Logout Button */}
-      <TouchableOpacity style={[styles.logoutBtn]} onPress={handleLogout}>
-        <Text style={styles.logoutText}>Logout</Text>
-      </TouchableOpacity>
+    {/* Top: Create Group Box */}
+    <View style={[styles.box, themeStyles.box]}>
+    <Text style={[styles.title, themeStyles.title]}>Create Group</Text>
+    <TouchableOpacity
+    style={[styles.button, themeStyles.button]}
+    onPress={handleCreateGroup}
+    >
+    <Text style={[styles.buttonText, themeStyles.buttonText]}>Create</Text>
+    </TouchableOpacity>
+    </View>
+    
+    {/* Bottom: Join Group Input */}
+    <View style={styles.joinContainer}>
+    <Text style={[styles.label, themeStyles.label]}>Join Group</Text>
+    <TextInput
+    style={[styles.input, themeStyles.input]}
+    value={groupCode}
+    onChangeText={handleTextChange}
+    maxLength={6}
+    autoCapitalize="characters"
+    placeholder="ABCDEF"
+    placeholderTextColor={isDark ? '#888' : '#aaa'}
+    />
+    <TouchableOpacity style={styles.joinButton} onPress={handleJoinGroup}>
+    <Text style={styles.joinButtonText}>Enter</Text>
+    </TouchableOpacity>
+    </View>
+    
+    {/* Logout Button */}
+    <TouchableOpacity style={[styles.logoutBtn]} onPress={handleLogout}>
+    <Text style={styles.logoutText}>Logout</Text>
+    </TouchableOpacity>
     </KeyboardAvoidingView>
   );
 };
@@ -169,6 +213,21 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
+  joinButton: {
+    marginTop: 10,
+    backgroundColor: '#4CAF50',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  
+  joinButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  
 });
 
 const lightTheme = StyleSheet.create({

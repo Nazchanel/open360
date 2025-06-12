@@ -8,6 +8,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  Alert
 } from 'react-native';
 import Geolocation from '@react-native-community/geolocation';
 import { LeafletView } from 'react-native-leaflet-view';
@@ -26,13 +27,37 @@ interface MemberLocation {
 const MapScreen = () => {
   const route = useRoute<MapScreenRouteProp>();
   const { username, groupName, members } = route.params;
-
+  
   const [location, setLocation] = useState<LatLng | null>(null);
   const [mapCenter, setMapCenter] = useState<LatLng | null>(null);
   const [zoom, setZoom] = useState(10);
   const [memberLocations, setMemberLocations] = useState<Record<string, MemberLocation>>({});
   const watchId = useRef<number | null>(null);
-
+  
+  // Save user location to Firestore
+  const saveLocationToFirestore = async (lat: number, lng: number) => {
+    try {
+      const geopoint = new firestore.GeoPoint(lat, lng);
+      await firestore()
+      .collection('groups')
+      .doc(groupName)
+      .set(
+        {
+          locations: {
+            [username]: {
+              geopoint: geopoint,
+              timestamp: firestore.FieldValue.serverTimestamp(),
+            },
+          },
+        },
+        { merge: true }
+      );
+      console.log('Location saved to Firestore');
+    } catch (error) {
+      console.error('Failed to save location:', error);
+    }
+  };
+  
   const getCurrentLocation = () => {
     Geolocation.getCurrentPosition(
       position => {
@@ -43,6 +68,9 @@ const MapScreen = () => {
         setLocation(loc);
         setMapCenter(loc);
         setZoom(18);
+        
+        // Save location right after fetching
+        saveLocationToFirestore(loc.lat, loc.lng);
       },
       error => {
         console.error('Error getting location:', error);
@@ -50,22 +78,7 @@ const MapScreen = () => {
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
     );
   };
-
-  const getGroupLocations = async (group: string): Promise<Record<string, MemberLocation>> => {
-    try {
-      const doc = await firestore().collection('groups').doc(group).get();
-      const locations = doc.get('locations');
-      if (locations && typeof locations === 'object' && !Array.isArray(locations)) {
-        return locations as Record<string, MemberLocation>;
-      } else {
-        return {};
-      }
-    } catch (err) {
-      console.error('Error fetching locations:', err);
-      return {};
-    }
-  };
-
+  
   useEffect(() => {
     const requestLocationPermission = async () => {
       if (Platform.OS === 'android') {
@@ -84,9 +97,9 @@ const MapScreen = () => {
           return;
         }
       }
-
+      
       getCurrentLocation();
-
+      
       watchId.current = Geolocation.watchPosition(
         position => {
           const loc = {
@@ -94,6 +107,9 @@ const MapScreen = () => {
             lng: position.coords.longitude,
           };
           setLocation(loc);
+          
+          // Save updated location on watch
+          saveLocationToFirestore(loc.lat, loc.lng);
         },
         error => {
           console.error('Error watching location:', error);
@@ -101,32 +117,51 @@ const MapScreen = () => {
         { enableHighAccuracy: true, distanceFilter: 0, interval: 5000, fastestInterval: 5000 }
       );
     };
-
+    
     requestLocationPermission();
-
+    
     return () => {
       if (watchId.current !== null) {
         Geolocation.clearWatch(watchId.current);
       }
     };
   }, []);
-
+  
+  const getGroupLocations = async (group: string): Promise<Record<string, MemberLocation>> => {
+    try {
+      const doc = await firestore().collection('groups').doc(group).get();
+      const locations = doc.get('locations');
+      if (locations && typeof locations === 'object' && !Array.isArray(locations)) {
+        return locations as Record<string, MemberLocation>;
+      } else {
+        return {};
+      }
+    } catch (err) {
+      console.error('Error fetching locations:', err);
+      return {};
+    }
+  };
+  
   useEffect(() => {
+    console.log('\n\n\n\nGET GROUP MEMBER LOCATION TEST\n\n\n\n');
+    
     const loadLocations = async () => {
-      const locs = await getGroupLocations(groupName);
+      const locs = await getGroupLocations("MHYLZN");
+      console.log("Locations")
+      console.log(locs)
       setMemberLocations(locs);
     };
     loadLocations();
-  }, [groupName]);
-
+  }, []);
+  
   if (!location || !mapCenter) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" />
+      <ActivityIndicator size="large" />
       </View>
     );
   }
-
+  
   const currentLocationMarker = {
     id: 'currentLocation',
     position: location,
@@ -134,139 +169,145 @@ const MapScreen = () => {
     iconColor: 'blue',
     iconSize: [20, 20],
   };
-
+  
   return (
     <View style={{ flex: 1 }}>
-      <LeafletView mapCenterPosition={mapCenter} mapMarkers={[currentLocationMarker]} zoom={zoom} />
-
-      {/* Floating group name header */}
+    <LeafletView mapCenterPosition={mapCenter} mapMarkers={[currentLocationMarker]} zoom={zoom} />
+    
+    {/* Floating group name header
       <View style={styles.headerContainer}>
-        <Text style={styles.headerText}>{groupName}</Text>
-      </View>
-
+      <Text style={styles.headerText}>{groupName}</Text>
+      </View> */}
+      
       {/* Members panel with coordinates and time */}
       <View style={styles.membersPanel}>
-        <ScrollView
-          horizontal={false}
-          showsVerticalScrollIndicator={true}
-          contentContainerStyle={{ paddingVertical: 4 }}
-        >
-          {members.map((member, index) => {
-            const memberLoc = memberLocations[member];
-            const coords = memberLoc?.geopoint;
-            const time = memberLoc?.timestamp?.toDate?.();
-
-            return (
-              <TouchableOpacity key={index} style={styles.memberButton}>
-                <Text style={styles.pinEmoji}>📍</Text>
-                <View>
-                  <Text style={styles.memberText}>{member}</Text>
-                  {coords ? (
-                    <Text style={styles.coordText}>
-                      ({coords.latitude.toFixed(4)}, {coords.longitude.toFixed(4)})
-                    </Text>
-                  ) : (
-                    <Text style={styles.coordText}>Location unknown</Text>
-                  )}
-                  {time ? (
-                    <Text style={styles.timeText}>{time.toLocaleTimeString()}</Text>
-                  ) : (
-                    <Text style={styles.timeText}>No update time</Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+      <ScrollView
+      horizontal={false}
+      showsVerticalScrollIndicator={true}
+      contentContainerStyle={{ paddingVertical: 4 }}
+      >
+      {members.map((member, index) => {
+        const memberLoc = memberLocations[member];
+        
+        // Extract lat/lng safely
+        const coords = memberLoc?.geopoint;
+        // Extract timestamp as Date object safely
+        const time = memberLoc?.timestamp?.toDate?.();
+        
+        return (
+          <TouchableOpacity key={index} style={styles.memberButton}>
+          <Text style={styles.pinEmoji}>📍</Text>
+          <View>
+          <Text style={styles.memberText}>{member}</Text>
+          
+          {coords && typeof coords.latitude === 'number' && typeof coords.longitude === 'number' ? (
+            <Text style={styles.coordText}>
+            ({coords.latitude.toFixed(4)}, {coords.longitude.toFixed(4)})
+            </Text>
+          ) : (
+            <Text style={styles.coordText}>Location unknown</Text>
+          )}
+          
+          {time instanceof Date && !isNaN(time.getTime()) ? (
+            <Text style={styles.timeText}>{time.toLocaleTimeString()}</Text>
+          ) : (
+            <Text style={styles.timeText}>No update time</Text>
+          )}
+          </View>
+          </TouchableOpacity>
+        );
+      })}
+      
+      </ScrollView>
       </View>
-
+      
       <TouchableOpacity style={styles.button} onPress={getCurrentLocation}>
-        <Text style={styles.buttonText}>Zoom to Current Location</Text>
+      <Text style={styles.buttonText}>Zoom to Current Location</Text>
       </TouchableOpacity>
-    </View>
-  );
-};
-
-const styles = StyleSheet.create({
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-
-  button: {
-    position: 'absolute',
-    bottom: 40,
-    right: 20,
-    backgroundColor: '#007AFF',
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 25,
-    elevation: 4,
-  },
-  buttonText: { color: 'white', fontWeight: '600', fontSize: 14 },
-
-  headerContainer: {
-    position: 'absolute',
-    top: 15,
-    alignSelf: 'center',
-    left: 0,
-    right: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingVertical: 4,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    marginHorizontal: 20,
-  },
-  headerText: {
-    color: 'white',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-
-  membersPanel: {
-    position: 'absolute',
-    top: 50,
-    left: 10,
-    width: 180,
-    maxHeight: 400,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  memberButton: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginVertical: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: '#f0f0f0',
-  },
-  pinEmoji: {
-    fontSize: 16,
-    marginRight: 8,
-    marginTop: 4,
-  },
-  memberText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#333',
-  },
-  coordText: {
-    fontSize: 11,
-    color: '#666',
-    marginTop: 2,
-  },
-  timeText: {
-    fontSize: 10,
-    color: '#999',
-    marginTop: 1,
-  },
-});
-
-export default MapScreen;
+      </View>
+    );
+  };
+  
+  const styles = StyleSheet.create({
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    
+    button: {
+      position: 'absolute',
+      bottom: 40,
+      right: 20,
+      backgroundColor: '#007AFF',
+      paddingVertical: 12,
+      paddingHorizontal: 18,
+      borderRadius: 25,
+      elevation: 4,
+    },
+    buttonText: { color: 'white', fontWeight: '600', fontSize: 14 },
+    
+    headerContainer: {
+      position: 'absolute',
+      top: 15,
+      alignSelf: 'center',
+      left: 0,
+      right: 0,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      paddingVertical: 4,
+      paddingHorizontal: 16,
+      borderRadius: 20,
+      marginHorizontal: 20,
+    },
+    headerText: {
+      color: 'white',
+      fontWeight: '700',
+      fontSize: 14,
+    },
+    
+    membersPanel: {
+      position: 'absolute',
+      top: 50,
+      left: 10,
+      width: 180,
+      maxHeight: 400,
+      backgroundColor: 'rgba(255,255,255,0.95)',
+      borderRadius: 10,
+      paddingVertical: 6,
+      paddingHorizontal: 8,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.2,
+      shadowRadius: 3,
+      elevation: 3,
+    },
+    memberButton: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginVertical: 6,
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+      borderRadius: 6,
+      backgroundColor: '#f0f0f0',
+    },
+    pinEmoji: {
+      fontSize: 16,
+      marginRight: 8,
+      marginTop: 4,
+    },
+    memberText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: '#333',
+    },
+    coordText: {
+      fontSize: 11,
+      color: '#666',
+      marginTop: 2,
+    },
+    timeText: {
+      fontSize: 10,
+      color: '#999',
+      marginTop: 1,
+    },
+  });
+  
+  export default MapScreen;

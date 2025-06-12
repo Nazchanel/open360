@@ -201,7 +201,8 @@ const DashboardScreen = () => {
         createdBy: userId,
         createdByName: emailUsername,
         members:[emailUsername],
-        roles:{[emailUsername]:"admin"}
+        roles:{[emailUsername]:"admin"},
+        locations:{[emailUsername]:"admin"},
       });
       
       // Add group to users collection for current user

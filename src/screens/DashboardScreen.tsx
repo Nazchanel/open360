@@ -248,7 +248,10 @@ const DashboardScreen = () => {
         <TouchableOpacity
         key={index}
         style={styles.joinButton}
-        onPress={() => console.log(`Pressed ${group}`)}
+        onPress={() => navigation.navigate('Map', {
+        username: auth().currentUser?.email?.split('@')[0] || 'User',
+        groupName: group, // optional, if you want to show/use this
+        })}
         >
         <Text style={styles.joinButtonText}>{group}</Text>
         </TouchableOpacity>

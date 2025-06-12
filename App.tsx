@@ -7,11 +7,13 @@ import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
 import LoginScreen from './src/screens/LoginScreen';
 import SignUpScreen from './src/screens/SignUpScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
+import MapScreen from './src/screens/MapScreen';
 
 export type RootStackParamList = {
   Login: undefined;
   SignUp: undefined;
   Dashboard: undefined;
+  Map: {username : string; groupName : string}
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -41,7 +43,10 @@ const App = () => {
     <NavigationContainer theme={isDarkMode ? DarkTheme : DefaultTheme}>
     <Stack.Navigator screenOptions={{ headerShown: false }}>
     {user ? (
+      <>
       <Stack.Screen name="Dashboard" component={DashboardScreen} />
+      <Stack.Screen name="Map" component={MapScreen} />
+      </>
     ) : (
       <>
       <Stack.Screen name="Login" component={LoginScreen} />
@@ -49,6 +54,7 @@ const App = () => {
       </>
     )}
     </Stack.Navigator>
+    
     </NavigationContainer>
   );
 };

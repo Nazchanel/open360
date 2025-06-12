@@ -10,6 +10,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@react-native-community/geolocation": "^3.4.0",
     "@react-native-firebase/app": "^22.2.1",
     "@react-native-firebase/auth": "^22.2.1",
     "@react-native-firebase/firestore": "^22.2.1",
@@ -20,9 +21,16 @@
     "react-icons-kit": "^2.0.0",
     "react-native": "0.79.3",
     "react-native-dotenv": "^3.4.11",
+    "react-native-geolocation-service": "^5.3.1",
+    "react-native-gesture-handler": "^2.25.0",
+    "react-native-leaflet-view": "^1.1.2",
+    "react-native-maps": "^1.24.3",
+    "react-native-permissions": "^5.4.1",
+    "react-native-reanimated": "^3.18.0",
     "react-native-safe-area-context": "^5.4.1",
     "react-native-screens": "^4.11.1",
     "react-native-vector-icons": "^10.2.0",
+    "react-native-webview": "^13.15.0",
     "vector-icons": "^0.1.0"
   },
   "devDependencies": {

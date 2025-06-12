@@ -15,7 +15,7 @@ import auth, { firebase } from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../../App'; // adjust this path as needed
+import type { RootStackParamList } from '../../App';
 
 const DashboardScreen = () => {
   const isDark = useColorScheme() === 'dark';
@@ -61,7 +61,7 @@ const DashboardScreen = () => {
       
       if (documentSnapshot.data() === undefined) {
         Alert.alert('Error', 'Group does not exist');
-        return; // 🚨 Exit to prevent running the rest of the code
+        return;
       }
       
       console.log('Group data:', documentSnapshot.data());
@@ -115,12 +115,33 @@ const DashboardScreen = () => {
   const themeStyles = isDark ? darkTheme : lightTheme;
   
   return (
+    
+    
     <KeyboardAvoidingView
     style={[styles.container, themeStyles.container]}
     behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-    {/* Top: Create Group Box */}
+    <ScrollView
+    contentContainerStyle={{ paddingBottom: 80 }} // allows scrolling beyond keyboard
+    keyboardShouldPersistTaps="handled"
+    >
+    {/* 🔝 Header Row */}
+    <View style={styles.headerContainer}>
+    <Text style={[styles.header, themeStyles.title]}>
+    Hello, {auth().currentUser?.email?.split('@')[0] || 'User'}
+    </Text>
+    
+    <TouchableOpacity onPress={handleLogout} style={styles.logoutBtnTop}>
+    <Text style={styles.logoutText}>Logout</Text>
+    </TouchableOpacity>
+    </View>
+    
+    
+    
+    {/* Create Group Box */}
     <View style={[styles.box, themeStyles.box]}>
+    
+    
     <Text style={[styles.title, themeStyles.title]}>Create Group</Text>
     <TouchableOpacity
     style={[styles.button, themeStyles.button]}
@@ -130,9 +151,21 @@ const DashboardScreen = () => {
     </TouchableOpacity>
     </View>
     
-    {/* Bottom: Join Group Input */}
-    <View style={styles.joinContainer}>
-    <Text style={[styles.label, themeStyles.label]}>Join Group</Text>
+    {/* Available Groups Box */}
+    <View style={[styles.box, themeStyles.box]}>
+    <Text style={[styles.title, themeStyles.title]}>Available Groups</Text>
+    <ScrollView style={{ maxHeight: 200 }}>
+    {['Group A', 'Group B', 'Group C'].map((group, index) => (
+      <TouchableOpacity key={index} style={styles.joinButton} onPress={() => console.log(`Pressed ${group}`)}>
+      <Text style={styles.joinButtonText}>{group}</Text>
+      </TouchableOpacity>
+    ))}
+    </ScrollView>
+    </View>
+    
+    {/* Join Group Box */}
+    <View style={[styles.box, themeStyles.box]}>
+    <Text style={[styles.title, themeStyles.title]}>Join Group</Text>
     <TextInput
     style={[styles.input, themeStyles.input]}
     value={groupCode}
@@ -146,11 +179,8 @@ const DashboardScreen = () => {
     <Text style={styles.joinButtonText}>Enter</Text>
     </TouchableOpacity>
     </View>
+    </ScrollView>
     
-    {/* Logout Button */}
-    <TouchableOpacity style={[styles.logoutBtn]} onPress={handleLogout}>
-    <Text style={styles.logoutText}>Logout</Text>
-    </TouchableOpacity>
     </KeyboardAvoidingView>
   );
 };
@@ -159,8 +189,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'space-between',
-    paddingVertical: 40,
+    paddingVertical: 30,
     paddingHorizontal: 20,
+  },
+  headerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  logoutBtnTop: {
+    backgroundColor: '#ff5c5c',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
   },
   box: {
     padding: 24,
@@ -169,6 +211,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 6,
     elevation: 4,
+  },
+  header: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 20,
   },
   title: {
     fontSize: 24,

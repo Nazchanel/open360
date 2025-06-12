@@ -20,7 +20,7 @@ const App = () => {
   const [user, setUser] = useState<FirebaseAuthTypes.User | null>(null);
   const [initializing, setInitializing] = useState(true);
   const isDarkMode = useColorScheme() === 'dark';
-
+  
   useEffect(() => {
     const unsubscribe = auth().onAuthStateChanged(u => {
       setUser(u);
@@ -28,27 +28,27 @@ const App = () => {
     });
     return unsubscribe;
   }, []);
-
+  
   if (initializing) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" />
+      <ActivityIndicator size="large" />
       </View>
     );
   }
-
+  
   return (
     <NavigationContainer theme={isDarkMode ? DarkTheme : DefaultTheme}>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {user ? (
-          <Stack.Screen name="Dashboard" component={DashboardScreen} />
-        ) : (
-          <>
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="SignUp" component={SignUpScreen} />
-          </>
-        )}
-      </Stack.Navigator>
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    {user ? (
+      <Stack.Screen name="Dashboard" component={DashboardScreen} />
+    ) : (
+      <>
+      <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="SignUp" component={SignUpScreen} />
+      </>
+    )}
+    </Stack.Navigator>
     </NavigationContainer>
   );
 };

@@ -4,6 +4,10 @@ package-lock.json
 __tests__
 ios
 
+android/app/build
+
+android/app/google-services.json
+
 # OSX
 #
 .DS_Store

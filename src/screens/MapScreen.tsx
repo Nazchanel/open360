@@ -278,8 +278,15 @@ const MapScreen = () => {
       const coords = memberLoc?.geopoint;
       const time = memberLoc?.timestamp?.toDate?.();
       
+      const handleMemberPress = () => {
+        if (coords && typeof coords.latitude === 'number' && typeof coords.longitude === 'number') {
+          setMapCenter({ lat: coords.latitude, lng: coords.longitude });
+          setZoom(18);
+        }
+      };
+      
       return (
-        <TouchableOpacity key={index} style={styles.memberButton}>
+        <TouchableOpacity key={index} style={styles.memberButton} onPress={handleMemberPress}>
         <Text style={[styles.pinEmoji, member === username ? styles.bluePin : styles.redPin]}>📍</Text>
         <View>
         <Text style={styles.memberText}>

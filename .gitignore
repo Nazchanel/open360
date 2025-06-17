@@ -2,11 +2,17 @@
 package-lock.json
 .bundle
 __tests__
-ios
 
+# IOS related
+ios
+Gemfile
+.watchmanconfig
+
+# Android related
 android/app/build
 
-android/app/google-services.json
+# Firebase credentials
+android/app/google-services.json 
 
 # OSX
 #

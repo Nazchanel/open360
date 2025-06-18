@@ -388,7 +388,11 @@ const MapScreen = () => {
           {members.map((member, index) => {
             const memberLoc = memberLocations[member];
             const coords = memberLoc?.geopoint;
-            const time = memberLoc?.timestamp?.toDate?.();
+            let time = memberLoc?.timestamp?.toDate?.();
+            // If this is the current user and no timestamp, use device time
+            if (member === username && (!time || !(time instanceof Date) || isNaN(time.getTime()))) {
+              time = new Date();
+            }
             const handleMemberPress = () => {
               if (coords && typeof coords.latitude === 'number' && typeof coords.longitude === 'number') {
                 setMapCenter({ lat: coords.latitude, lng: coords.longitude });
@@ -406,7 +410,9 @@ const MapScreen = () => {
                     <Text style={[styles.coordText, colorScheme === 'dark' && { color: '#ccc' }]}>Location unknown</Text>
                   )}
                   {time instanceof Date && !isNaN(time.getTime()) ? (
-                    <Text style={[styles.timeText, colorScheme === 'dark' && { color: '#aaa' }]}>{time.toLocaleTimeString()}</Text>
+                    <Text style={[styles.timeText, colorScheme === 'dark' && { color: '#aaa' }]}> 
+                      {time.toLocaleDateString()} {time.toLocaleTimeString()}
+                    </Text>
                   ) : (
                     <Text style={[styles.timeText, colorScheme === 'dark' && { color: '#aaa' }]}>No update time</Text>
                   )}

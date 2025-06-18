@@ -7,7 +7,13 @@ import {
   TouchableOpacity,
   Text,
   StyleSheet,
-  ScrollView
+  ScrollView,
+  useColorScheme,
+  Animated,
+  Easing,
+  Dimensions,
+  BackHandler,
+  PanResponder
 } from 'react-native';
 import Geolocation from '@react-native-community/geolocation';
 import { LeafletView } from 'react-native-leaflet-view';
@@ -21,6 +27,7 @@ type MapScreenRouteProp = RouteProp<RootStackParamList, 'Map'>;
 interface MemberLocation {
   geopoint?: { latitude: number; longitude: number };
   timestamp?: { toDate: () => Date };
+  icon?: string; // add icon property
 }
 
 const MapScreen = () => {
@@ -32,7 +39,82 @@ const MapScreen = () => {
   const [zoom, setZoom] = useState(10);
   const [memberLocations, setMemberLocations] = useState<Record<string, MemberLocation>>({});
   const watchId = useRef<number | null>(null);
-  
+  const colorScheme = useColorScheme();
+  const [panelOpen, setPanelOpen] = useState(true);
+  const panelAnim = useRef(new Animated.Value(0)).current; // 0=open, -200=closed
+  const settingsPanelWidth = 220;
+  const screenWidth = Dimensions.get('window').width;
+  const settingsClosedX = settingsPanelWidth;
+  const settingsOpenX = 0;
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsAnim = useRef(new Animated.Value(settingsClosedX)).current;
+  const [myEmoji, setMyEmoji] = useState('📍');
+  const emojiOptions = ['😀','😎','🦄','🚀','🐱','🐶','🍕','🌟','🎸','🏀','🚗','🎮','🎲','🎯','🎹','📚','🧩','🍔','🍦','🏝️','🧑‍💻','🦊','🐼','🐸','🐵','🦁','🐯','🐨','🐻','🐷','🐸','🐔','🐧','🐦','🐤','🐣','🐥','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🐛','🦋','🐌','🐞','🐜','🦟','🦗','🕷️','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧','🐘','🦛','🦏','🐪','🐫','🦒','🦘','🦬','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐕‍🦺','🐈','🐓','🦃','🦤','🦚','🦜','🦢','🦩','🕊️','🐇','🦝','🦨','🦡','🦫','🦦','🦥','🐁','🐀','🐿️','🦔'];
+
+  const panelPanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        // Only respond to horizontal swipes to the left
+        return Math.abs(gestureState.dx) > 20 && gestureState.dx < 0;
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        if (gestureState.dx < -40) {
+          setPanelOpen(false);
+        }
+      },
+    })
+  ).current;
+
+  useEffect(() => {
+    Animated.timing(panelAnim, {
+      toValue: panelOpen ? 0 : -200,
+      duration: 300,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [panelOpen]);
+
+  useEffect(() => {
+    Animated.timing(settingsAnim, {
+      toValue: settingsOpen ? settingsOpenX : settingsClosedX,
+      duration: 200,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [settingsOpen]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const onBack = () => {
+      setSettingsOpen(false);
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
+    return () => sub.remove();
+  }, [settingsOpen]);
+
+  useEffect(() => {
+    const fetchMyEmoji = async () => {
+      const doc = await firestore().collection('groups').doc(groupName).get();
+      const icons = (doc.get('icons') || {}) as Record<string, string>;
+      if (icons && typeof icons === 'object' && icons[username]) setMyEmoji(icons[username]);
+    };
+    fetchMyEmoji();
+  }, [groupName, username]);
+
+  const saveMyEmoji = async (emoji: string) => {
+    await firestore().collection('groups').doc(groupName).set({
+      icons: { [username]: emoji }
+    }, { merge: true });
+    setMyEmoji(emoji);
+  };
+
+  const isEmojiUnique = (emoji: string) => {
+    const groupIcons = Object.values(memberLocations).map((m: MemberLocation) => m.icon).filter(Boolean);
+    if (emoji === '📍') return true;
+    return !groupIcons.includes(emoji);
+  };
+
   // Function to slightly adjust positions that are too close
   const adjustClosePositions = (markers: any[]) => {
     const adjustedMarkers = [...markers];
@@ -65,8 +147,8 @@ const MapScreen = () => {
       markers.push({
         id: 'currentLocation',
         position: location,
-        icon: '📍',
-        iconColor: 'blue',
+        icon: myEmoji || '📍',
+        iconColor: myEmoji === '📍' ? 'red' : undefined,
         iconSize: [32, 32],
         size: [32, 32],
         title: `${username} (You)`
@@ -77,11 +159,12 @@ const MapScreen = () => {
     members.forEach(member => {
       if (member !== username && memberLocations[member]?.geopoint) {
         const coords = memberLocations[member].geopoint;
+        const icon = memberLocations[member]?.icon || '📍';
         markers.push({
           id: member,
           position: { lat: coords.latitude, lng: coords.longitude },
-          icon: '📍',
-          iconColor: 'red',
+          icon,
+          iconColor: icon === '📍' ? 'red' : undefined,
           iconSize: [32, 32],
           size: [32, 32],
           title: member
@@ -236,8 +319,15 @@ const MapScreen = () => {
     try {
       const doc = await firestore().collection('groups').doc(group).get();
       const locations = doc.get('locations');
+      const iconsRaw = doc.get('icons');
+      const icons: Record<string, string> = (iconsRaw && typeof iconsRaw === 'object' && !Array.isArray(iconsRaw)) ? iconsRaw as Record<string, string> : {};
       if (locations && typeof locations === 'object' && !Array.isArray(locations)) {
-        return locations as Record<string, MemberLocation>;
+        const locs: Record<string, any> = locations as Record<string, any>;
+        const result: Record<string, MemberLocation> = {};
+        Object.keys(locs).forEach(member => {
+          result[member] = { ...locs[member], icon: icons[member] };
+        });
+        return result;
       } else {
         return {};
       }
@@ -247,75 +337,138 @@ const MapScreen = () => {
     }
   };
   
-  if (!location || !mapCenter) {
+  if (!location || location.lat === 0 || location.lng === 0) {
+    // Only show loading if device location is not available
     return (
       <View style={styles.loadingContainer}>
-      <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" />
       </View>
     );
   }
-  
+  // Don't block UI for member locations, render map as soon as device location is ready
+
   return (
     <View style={{ flex: 1 }}>
-    <LeafletView 
-    mapCenterPosition={mapCenter} 
-    mapMarkers={getMapMarkers()} 
-    zoom={zoom} 
-    />
-    
-    <View style={styles.headerContainer}>
-    <Text style={styles.headerText}>{groupName}</Text>
-    </View>
-    
-    <View style={styles.membersPanel}>
-    <ScrollView
-    horizontal={false}
-    showsVerticalScrollIndicator={true}
-    contentContainerStyle={{ paddingVertical: 4 }}
-    >
-    {members.map((member, index) => {
-      const memberLoc = memberLocations[member];
-      const coords = memberLoc?.geopoint;
-      const time = memberLoc?.timestamp?.toDate?.();
-      
-      const handleMemberPress = () => {
-        if (coords && typeof coords.latitude === 'number' && typeof coords.longitude === 'number') {
-          setMapCenter({ lat: coords.latitude, lng: coords.longitude });
-          setZoom(18);
-        }
-      };
-      
-      return (
-        <TouchableOpacity key={index} style={styles.memberButton} onPress={handleMemberPress}>
-        <Text style={[styles.pinEmoji, member === username ? styles.bluePin : styles.redPin]}>📍</Text>
-        <View>
-        <Text style={styles.memberText}>
-        {member === username ? `${member} (You)` : member}
-        </Text>
-        
-        {coords && typeof coords.latitude === 'number' && typeof coords.longitude === 'number' ? (
-          <Text style={styles.coordText}>
-          ({coords.latitude.toFixed(4)}, {coords.longitude.toFixed(4)})
-          </Text>
-        ) : (
-          <Text style={styles.coordText}>Location unknown</Text>
-        )}
-        
-        {time instanceof Date && !isNaN(time.getTime()) ? (
-          <Text style={styles.timeText}>{time.toLocaleTimeString()}</Text>
-        ) : (
-          <Text style={styles.timeText}>No update time</Text>
-        )}
-        </View>
+      <LeafletView 
+        mapCenterPosition={mapCenter || location} // fallback to device location if mapCenter is null
+        mapMarkers={getMapMarkers()} 
+        zoom={zoom} 
+        zoomControl={false}
+      />
+      {/* Hamburger button only when panel is closed */}
+      {!panelOpen && (
+        <TouchableOpacity
+          style={{ position: 'absolute', top: 55, left: 10, zIndex: 20, backgroundColor: colorScheme === 'dark' ? '#222' : '#fff', borderRadius: 20, padding: 8, elevation: 4 }}
+          onPress={() => setPanelOpen(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={{ fontSize: 22, color: colorScheme === 'dark' ? '#fff' : '#333' }}>☰</Text>
         </TouchableOpacity>
-      );
-    })}
-    </ScrollView>
-    </View>
-    
-    <TouchableOpacity style={styles.button} onPress={getCurrentLocation}>
-    <Text style={styles.buttonText}>Zoom to Current Location</Text>
-    </TouchableOpacity>
+      )}
+      <Animated.View
+        style={[styles.membersPanel, colorScheme === 'dark' && { backgroundColor: '#000' }, { transform: [{ translateX: panelAnim }] }]}
+        {...panelPanResponder.panHandlers}
+      > 
+        {/* Close button inside panel when open */}
+        {panelOpen && (
+          <TouchableOpacity
+            style={{ position: 'absolute', top: 4, right: 4, zIndex: 21, backgroundColor: colorScheme === 'dark' ? '#222' : '#fff', borderRadius: 16, padding: 8, elevation: 2 }}
+            onPress={() => setPanelOpen(false)}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Text style={{ fontSize: 20, color: colorScheme === 'dark' ? '#fff' : '#333', textAlign: 'center' }}>×</Text>
+          </TouchableOpacity>
+        )}
+        <ScrollView
+          horizontal={false}
+          showsVerticalScrollIndicator={true}
+          contentContainerStyle={{ paddingVertical: 24 }} // add top padding for close button
+        >
+          {members.map((member, index) => {
+            const memberLoc = memberLocations[member];
+            const coords = memberLoc?.geopoint;
+            const time = memberLoc?.timestamp?.toDate?.();
+            const handleMemberPress = () => {
+              if (coords && typeof coords.latitude === 'number' && typeof coords.longitude === 'number') {
+                setMapCenter({ lat: coords.latitude, lng: coords.longitude });
+                setZoom(18);
+              }
+            };
+            return (
+              <TouchableOpacity key={index} style={[styles.memberButton, colorScheme === 'dark' && { backgroundColor: '#222' }]} onPress={handleMemberPress}>
+                <Text style={[styles.pinEmoji, member === username ? styles.bluePin : styles.redPin, colorScheme === 'dark' && { color: '#fff' }]}>{memberLoc?.icon || '📍'}</Text>
+                <View>
+                  <Text style={[styles.memberText, colorScheme === 'dark' && { color: '#fff' }]}> {member === username ? `${member} (You)` : member} </Text>
+                  {coords && typeof coords.latitude === 'number' && typeof coords.longitude === 'number' ? (
+                    <Text style={[styles.coordText, colorScheme === 'dark' && { color: '#ccc' }]}> ({coords.latitude.toFixed(4)}, {coords.longitude.toFixed(4)}) </Text>
+                  ) : (
+                    <Text style={[styles.coordText, colorScheme === 'dark' && { color: '#ccc' }]}>Location unknown</Text>
+                  )}
+                  {time instanceof Date && !isNaN(time.getTime()) ? (
+                    <Text style={[styles.timeText, colorScheme === 'dark' && { color: '#aaa' }]}>{time.toLocaleTimeString()}</Text>
+                  ) : (
+                    <Text style={[styles.timeText, colorScheme === 'dark' && { color: '#aaa' }]}>No update time</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </Animated.View>
+
+      <TouchableOpacity style={styles.button} onPress={getCurrentLocation}>
+        <Text style={styles.buttonText}>Current Location</Text>
+      </TouchableOpacity>
+
+      <View style={{ position: 'absolute', top: 55, right: 10, zIndex: 30 }}>
+        <TouchableOpacity
+          style={{ backgroundColor: colorScheme === 'dark' ? '#222' : '#fff', borderRadius: 20, padding: 8, elevation: 4 }}
+          onPress={() => setSettingsOpen(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={{ fontSize: 22, color: colorScheme === 'dark' ? '#fff' : '#333' }}>⚙️</Text>
+        </TouchableOpacity>
+      </View>
+      <Animated.View
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          width: settingsPanelWidth,
+          height: '100%',
+          backgroundColor: colorScheme === 'dark' ? '#111' : '#fff',
+          zIndex: 40,
+          padding: 18,
+          transform: [{ translateX: settingsAnim }],
+          overflow: 'hidden',
+          borderLeftWidth: settingsOpen ? 1 : 0,
+          borderLeftColor: colorScheme === 'dark' ? '#222' : '#eee',
+        }}
+        pointerEvents={settingsOpen ? 'auto' : 'none'}
+      >
+        {settingsOpen && (
+          <>
+            <TouchableOpacity style={{ position: 'absolute', top: 4, right: 4, zIndex: 41, padding: 16, borderRadius: 24, backgroundColor: 'rgba(0,0,0,0.08)' }} onPress={() => setSettingsOpen(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={{ fontSize: 28, color: colorScheme === 'dark' ? '#fff' : '#333', textAlign: 'center' }}>×</Text>
+            </TouchableOpacity>
+            <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 12, color: colorScheme === 'dark' ? '#fff' : '#222' }}>Choose your icon</Text>
+            <ScrollView contentContainerStyle={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+              {emojiOptions.map((emoji, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={{ padding: 6, margin: 4, borderRadius: 8, backgroundColor: myEmoji === emoji ? '#007AFF' : (colorScheme === 'dark' ? '#222' : '#eee'), opacity: isEmojiUnique(emoji) || emoji === '📍' ? 1 : 0.3 }}
+                  disabled={!(isEmojiUnique(emoji) || emoji === '📍')}
+                  onPress={async () => { await saveMyEmoji(emoji); setSettingsOpen(false); }}
+                >
+                  <Text style={{ fontSize: 28 }}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <Text style={{ marginTop: 10, color: colorScheme === 'dark' ? '#aaa' : '#555', fontSize: 13 }}>Red pin 📍 is the default and can be used by anyone.</Text>
+          </>
+        )}
+      </Animated.View>
     </View>
   );
 };

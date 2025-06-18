@@ -10,6 +10,7 @@ Gemfile
 
 # Android related
 android/app/build
+android/app/release
 
 # Firebase credentials
 android/app/google-services.json 

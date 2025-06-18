@@ -222,14 +222,12 @@ const DashboardScreen = () => {
   const themeStyles = isDark ? darkTheme : lightTheme;
   
   return (
-    
-    
     <KeyboardAvoidingView
     style={[styles.container, themeStyles.container]}
     behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
     <ScrollView
-    contentContainerStyle={{ paddingBottom: 90 }} // allows scrolling beyond keyboard
+    contentContainerStyle={{ paddingBottom: 90, paddingTop: 24 }} // more top padding
     keyboardShouldPersistTaps="handled"
     >
     {/* Header Row */}
@@ -237,21 +235,16 @@ const DashboardScreen = () => {
     <Text style={[styles.header, themeStyles.title]}>
     Hello, {auth().currentUser?.email?.split('@')[0] || 'User'}
     </Text>
-    
     <TouchableOpacity onPress={handleLogout} style={styles.logoutBtnTop}>
     <Text style={styles.logoutText}>Logout</Text>
     </TouchableOpacity>
     </View>
     
-    
-    
     {/* Create Group Box */}
-    <View style={[styles.box, themeStyles.box]}>
-    
-    
-    <Text style={[styles.title, themeStyles.title]}>Create Group</Text>
+    <View style={[styles.box, themeStyles.box, { marginBottom: 28 }]}> {/* more space below */}
+    <Text style={[styles.title, themeStyles.title, { marginBottom: 20 }]}>Create Group</Text>
     <TouchableOpacity
-    style={[styles.button, themeStyles.button]}
+    style={[styles.button, themeStyles.button, { marginTop: 8 }]}
     onPress={handleCreateGroup}
     >
     <Text style={[styles.buttonText, themeStyles.buttonText]}>Create</Text>
@@ -260,45 +253,43 @@ const DashboardScreen = () => {
     
     {/* Available Groups Box (conditionally rendered) */}
     {userGroups.length > 0 && (
-      <View style={[styles.box, themeStyles.box]}>
-      <Text style={[styles.title, themeStyles.title]}>Available Groups</Text>
+      <View style={[styles.box, themeStyles.box, { marginBottom: 28 }]}> {/* more space below */}
+      <Text style={[styles.title, themeStyles.title, { marginBottom: 20 }]}>Available Groups</Text>
       <ScrollView
-      style={userGroups.length > 3 ? { maxHeight: 180 } : undefined} // ~60 per item * 3 = 180px max height
-      nestedScrollEnabled={true} // ensures scrolling works inside parent ScrollView on Android
+      style={userGroups.length > 3 ? { maxHeight: 180 } : undefined}
+      nestedScrollEnabled={true}
+      contentContainerStyle={{ paddingBottom: 8 }}
       >
       {userGroups.map((group, index) => (
-  <TouchableOpacity
-    key={index}
-    style={styles.joinButton}
-    onPress={async () => {
-      try {
-        const members = await getGroupMembers(group);
-        navigation.navigate('Map', {
-          username: auth().currentUser?.email?.split('@')[0] || 'User',
-          groupName: group,
-          members: members ?? [],
-        });
-      } catch (error) {
-        console.error('Failed to fetch members:', error);
-        Alert.alert('Error', 'Unable to fetch group members.');
-      }
-    }}
-  >
-    <Text style={styles.joinButtonText}>{group}</Text>
-  </TouchableOpacity>
-))}
-
+        <TouchableOpacity
+        key={index}
+        style={[styles.joinButton, { marginBottom: 10 }]}
+        onPress={async () => {
+          try {
+            const members = await getGroupMembers(group);
+            navigation.navigate('Map', {
+              username: auth().currentUser?.email?.split('@')[0] || 'User',
+              groupName: group,
+              members: members ?? [],
+            });
+          } catch (error) {
+            console.error('Failed to fetch members:', error);
+            Alert.alert('Error', 'Unable to fetch group members.');
+          }
+        }}
+        >
+        <Text style={styles.joinButtonText}>{group}</Text>
+        </TouchableOpacity>
+      ))}
       </ScrollView>
       </View>
     )}
     
-    
-    
     {/* Join Group Box */}
-    <View style={[styles.box, themeStyles.box]}>
-    <Text style={[styles.title, themeStyles.title]}>Join Group</Text>
+    <View style={[styles.box, themeStyles.box, { marginBottom: 28 }]}> {/* more space below */}
+    <Text style={[styles.title, themeStyles.title, { marginBottom: 20 }]}>Join Group</Text>
     <TextInput
-    style={[styles.input, themeStyles.input]}
+    style={[styles.input, themeStyles.input, { marginBottom: 16 }]}
     value={groupCode}
     onChangeText={handleTextChange}
     maxLength={6}
@@ -306,12 +297,11 @@ const DashboardScreen = () => {
     placeholder="ABCDEF"
     placeholderTextColor={isDark ? '#888' : '#aaa'}
     />
-    <TouchableOpacity style={styles.joinButton} onPress={handleJoinGroup}>
+    <TouchableOpacity style={[styles.joinButton, { marginTop: 0 }]} onPress={handleJoinGroup}>
     <Text style={styles.joinButtonText}>Enter</Text>
     </TouchableOpacity>
     </View>
     </ScrollView>
-    
     </KeyboardAvoidingView>
   );
 };

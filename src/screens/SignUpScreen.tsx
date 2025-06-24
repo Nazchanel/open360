@@ -22,19 +22,19 @@ const SignUpScreen: React.FC<Props> = ({ navigation }) => {
   const styles = createStyles(isDarkMode);
   
   const handleSignUp = async () => {
-    const email = username + "@open360.com";
+    const email = username.trimStart().trimEnd + "@open360.com";
     try {
       await auth().createUserWithEmailAndPassword(email, password);
       await firestore()
-  .collection('users')
-  // In Firebase the username is stored as all lowercase, so defaults to that to prevent consistency issues
-  .doc(username.toLowerCase())
-  .set({
-    groups:[]
-  })
-  .then(() => {
-    console.log('User added!');
-  });
+      .collection('users')
+      // In Firebase the username is stored as all lowercase, so defaults to that to prevent consistency issues
+      .doc(username.toLowerCase())
+      .set({
+        groups:[]
+      })
+      .then(() => {
+        console.log('User added!');
+      });
       Alert.alert('Success', 'Account created!');
       navigation.navigate('Login');
     } catch (error: any) {

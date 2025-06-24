@@ -24,14 +24,14 @@ const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const styles = createStyles(isDarkMode);
   
   const handleLogin = async () => {
-    const email = username + "@open360.com";
+    const email = username.trimEnd().trimStart() + "@open360.com";
     try {
       await auth().signInWithEmailAndPassword(email, password);
       // Alert.alert('Success', 'Logged in!');
       navigation.replace('Dashboard');
     } catch (error: any) {
       let message = 'Login failed';
-      if (error.code === 'auth/invalid-email') message = 'Invalid email address';
+      if (error.code === 'auth/invalid-email') message = 'Invalid username';
       if (error.code === 'auth/user-not-found') message = 'No user found';
       if (error.code === 'auth/wrong-password') message = 'Incorrect password';
       Alert.alert('Error', message);

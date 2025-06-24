@@ -51,7 +51,6 @@ const DashboardScreen = () => {
   
   const handleLogout = async () => {
     await auth().signOut();
-    navigation.replace('Login');
   };
   
   // Function to generate random 6-letter uppercase code

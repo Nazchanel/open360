@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef } from 'react';
 import {
   PermissionsAndroid,
   Platform,
-  ActivityIndicator,
   View,
   TouchableOpacity,
   Text,
@@ -11,10 +10,10 @@ import {
   useColorScheme,
   Animated,
   Easing,
-  Dimensions,
   BackHandler,
   PanResponder,
-  Alert
+  Alert,
+  TextInput
 } from 'react-native';
 import Geolocation from '@react-native-community/geolocation';
 import { LeafletView } from 'react-native-leaflet-view';
@@ -55,6 +54,9 @@ const MapScreen = () => {
   const [myEmoji, setMyEmoji] = useState('📍');
   const [showEmojiPanel, setShowEmojiPanel] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [showJoinCodePanel, setShowJoinCodePanel] = useState(false);
+  const [joinCodeTime, setJoinCodeTime] = useState('');
+  const [joinCodeUnit, setJoinCodeUnit] = useState<'minutes' | 'hours'>('minutes');
   const emojiOptions = ['😀','😎','🦄','🚀','🐱','🐶','🍕','🌟','🎸','🏀','🚗','🎮','🎲','🎯','🎹','📚','🧩','🍔','🍦','🏝️','🧑‍💻','🦊','🐼','🐸','🐵','🦁','🐯','🐨','🐻','🐷','🐸','🐔','🐧','🐦','🐤','🐣','🐥','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🐛','🦋','🐌','🐞','🐜','🦟','🦗','🕷️','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧','🐘','🦛','🦏','🐪','🐫','🦒','🦘','🦬','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐕‍🦺','🐈','🐓','🦃','🦤','🦚','🦜','🦢','🦩','🕊️','🐇','🦝','🦨','🦡','🦫','🦦','🦥','🐁','🐀','🐿️','🦔'];
   
   const panelPanResponder = useRef(
@@ -428,6 +430,35 @@ const MapScreen = () => {
       }
     };
     
+    const handleLeaveGroup = async () => {
+      try {
+        // Fetch latest roles
+        const doc = await firestore().collection('groups').doc(groupName).get();
+        const rolesRaw = doc.get('roles') || {};
+        const roles: Record<string, string> = (rolesRaw && typeof rolesRaw === 'object' && !Array.isArray(rolesRaw)) ? rolesRaw as Record<string, string> : {};
+        const adminCount = Object.values(roles).filter(role => role === 'admin').length;
+        if (roles[username] === 'admin' && adminCount === 1) {
+          Alert.alert('Error', 'You are the only admin in the group. Assign another admin before leaving.');
+          return;
+        }
+        // Remove self from group document
+        await firestore().collection('groups').doc(groupName).update({
+          members: firestore.FieldValue.arrayRemove(username),
+          [`locations.${username}`]: firestore.FieldValue.delete(),
+          [`roles.${username}`]: firestore.FieldValue.delete(),
+          [`icons.${username}`]: firestore.FieldValue.delete(),
+        });
+        // Remove group from user's document in users collection
+        await firestore().collection('users').doc(username).update({
+          groups: firestore.FieldValue.arrayRemove(groupName),
+        });
+        navigation.replace('Dashboard');
+      } catch (err) {
+        Alert.alert('Error', 'Failed to leave group.');
+        console.error('Failed to leave group:', err);
+      }
+    };
+    
     const getGroupLocations = async (group: string): Promise<Record<string, MemberLocation>> => {
       try {
         const doc = await firestore().collection('groups').doc(group).get();
@@ -461,6 +492,57 @@ const MapScreen = () => {
         };
       } else {
         return { lat: 0, lng: 0 };
+      }
+    };
+    
+    const handleJoinCodeTimeChange = (text: string) => {
+      let num = text.replace(/[^0-9]/g, '');
+      if (num) {
+        let value = parseInt(num, 10);
+        if (joinCodeUnit === 'minutes') {
+          if (value > 59) value = 59;
+        } else {
+          if (value > 24) value = 24;
+        }
+        setJoinCodeTime(value.toString());
+      } else {
+        setJoinCodeTime('');
+      }
+    };
+    
+    const handleGenerateJoinCode = async () => {
+      // Validate input
+      const num = parseInt(joinCodeTime, 10);
+      if (!num || (joinCodeUnit === 'minutes' && (num < 5 || num > 59)) || (joinCodeUnit === 'hours' && (num < 1 || num > 24))) {
+        Alert.alert('Invalid time', 'Please enter a valid time between 5 and 59 minutes or 1 and 24 hours.');
+        return;
+      }
+      // Generate random 6-letter code
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      let code = '';
+      for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+      // Calculate expiration timestamp
+      const now = new Date();
+      let expiration = new Date(now);
+      if (joinCodeUnit === 'minutes') {
+        expiration.setMinutes(now.getMinutes() + num);
+      } else {
+        expiration.setHours(now.getHours() + num);
+      }
+      try {
+        
+        await firestore().collection('codes').doc(code).set({
+          expirationTime: firestore.Timestamp.fromDate(expiration),
+          groupID: groupName,
+        });
+        // Append code to activeCodes array in the group document
+        await firestore().collection('groups').doc(groupName).update({
+          activeCodes: firestore.FieldValue.arrayUnion(code),
+        });
+        Alert.alert('Join Code Generated', `Code: ${code}`);
+      } catch (err) {
+        Alert.alert('Error', 'Failed to generate join code.');
+        console.error('Failed to generate join code:', err);
       }
     };
     
@@ -584,10 +666,66 @@ const MapScreen = () => {
       >
       {settingsOpen && (
         <>
-        <TouchableOpacity style={{ position: 'absolute', top: 4, right: 4, zIndex: 41, padding: 16, borderRadius: 24, backgroundColor: 'rgba(0,0,0,0.08)' }} onPress={() => { setSettingsOpen(false); setShowEmojiPanel(false); setShowAdminPanel(false); }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <TouchableOpacity style={{ position: 'absolute', top: 4, right: 4, zIndex: 41, padding: 16, borderRadius: 24, backgroundColor: 'rgba(0,0,0,0.08)' }} onPress={() => { setSettingsOpen(false); setShowEmojiPanel(false); setShowAdminPanel(false); setShowJoinCodePanel(false); }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
         <Text style={{ fontSize: 28, color: colorScheme === 'dark' ? '#fff' : '#333', textAlign: 'center' }}>×</Text>
         </TouchableOpacity>
-        {!showEmojiPanel && !showAdminPanel ? (
+        {showJoinCodePanel ? (
+          <>
+          <TouchableOpacity style={{ marginBottom: 10 }} onPress={() => setShowJoinCodePanel(false)}>
+          <Text style={{ color: colorScheme === 'dark' ? '#fff' : '#333', fontSize: 16 }}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={{ color: colorScheme === 'dark' ? '#fff' : '#222', fontSize: 16, marginBottom: 10 }}>Enter expiration time (5 minutes to 24 hours):</Text>
+          <TextInput
+          value={joinCodeTime}
+          onChangeText={handleJoinCodeTimeChange}
+          keyboardType="numeric"
+          placeholder="Enter a number"
+          placeholderTextColor={colorScheme === 'dark' ? '#aaa' : '#888'}
+          style={{ borderWidth: 1, borderRadius: 8, padding: 10, marginBottom: 10, color: colorScheme === 'dark' ? '#fff' : '#222', backgroundColor: colorScheme === 'dark' ? '#333' : '#fff', borderColor: colorScheme === 'dark' ? '#444' : '#ccc', width: 120 }}
+          />
+          <View style={{ flexDirection: 'row', marginBottom: 16 }}>
+          <TouchableOpacity
+          style={{
+            backgroundColor: joinCodeUnit === 'minutes' ? '#007AFF' : (colorScheme === 'dark' ? '#222' : '#eee'),
+            borderRadius: 8,
+            paddingVertical: 8,
+            paddingHorizontal: 18,
+            marginRight: 10,
+            borderWidth: 1,
+            borderColor: joinCodeUnit === 'minutes' ? '#007AFF' : (colorScheme === 'dark' ? '#444' : '#ccc'),
+          }}
+          onPress={() => {
+            setJoinCodeUnit('minutes');
+            if (joinCodeTime && parseInt(joinCodeTime, 10) > 59) setJoinCodeTime('59');
+          }}
+          >
+          <Text style={{ color: joinCodeUnit === 'minutes' ? '#fff' : (colorScheme === 'dark' ? '#fff' : '#333'), fontWeight: '600' }}>minutes</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+          style={{
+            backgroundColor: joinCodeUnit === 'hours' ? '#007AFF' : (colorScheme === 'dark' ? '#222' : '#eee'),
+            borderRadius: 8,
+            paddingVertical: 8,
+            paddingHorizontal: 18,
+            borderWidth: 1,
+            borderColor: joinCodeUnit === 'hours' ? '#007AFF' : (colorScheme === 'dark' ? '#444' : '#ccc'),
+          }}
+          onPress={() => {
+            setJoinCodeUnit('hours');
+            if (joinCodeTime && parseInt(joinCodeTime, 10) > 24) setJoinCodeTime('24');
+          }}
+          >
+          <Text style={{ color: joinCodeUnit === 'hours' ? '#fff' : (colorScheme === 'dark' ? '#fff' : '#333'), fontWeight: '600' }}>hours</Text>
+          </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+          style={{ backgroundColor: '#007AFF', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center', marginTop: 10 }}
+          onPress={handleGenerateJoinCode}
+          >
+          <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Generate</Text>
+          </TouchableOpacity>
+          </>
+        ) : !showEmojiPanel && !showAdminPanel ? (
           <>
           <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 20, color: colorScheme === 'dark' ? '#fff' : '#222' }}>Settings</Text>
           {userRole === 'admin' && (
@@ -603,6 +741,27 @@ const MapScreen = () => {
           onPress={() => setShowEmojiPanel(true)}
           >
           <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Change Icon</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+          style={{ backgroundColor: '#8e44ad', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, marginBottom: 16, alignItems: 'center' }}
+          onPress={() => setShowJoinCodePanel(true)}
+          >
+          <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Generate Join Code</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+          style={{ backgroundColor: '#e74c3c', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, marginBottom: 16, alignItems: 'center' }}
+          onPress={() => {
+            Alert.alert(
+              'Leave Group',
+              'Are you sure you want to leave this group?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Leave', style: 'destructive', onPress: handleLeaveGroup },
+              ]
+            );
+          }}
+          >
+          <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Leave Group</Text>
           </TouchableOpacity>
           </>
         ) : showAdminPanel ? (

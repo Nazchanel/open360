@@ -9,7 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  ScrollView
+  ScrollView,
+  Modal
 } from 'react-native';
 import auth, { firebase } from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
@@ -23,11 +24,32 @@ const DashboardScreen = () => {
   
   const [groupCode, setGroupCode] = React.useState('');
   const [userGroups, setUserGroups] = React.useState<string[]>([]);
+  const [groupNames, setGroupNames] = React.useState<Record<string, string>>({});
   
+  const [showGroupNameModal, setShowGroupNameModal] = React.useState(false);
+  const [newGroupName, setNewGroupName] = React.useState('');
+
   React.useEffect(() => {
     fetchUserGroups();
   }, []);
   
+  // Fetch group names when userGroups changes
+  React.useEffect(() => {
+    const fetchNames = async () => {
+      const names: Record<string, string> = {};
+      for (const groupId of userGroups) {
+        try {
+          const doc = await firestore().collection('groups').doc(groupId).get();
+          const data = doc.data();
+          names[groupId] = data?.name || groupId;
+        } catch {
+          names[groupId] = groupId;
+        }
+      }
+      setGroupNames(names);
+    };
+    if (userGroups.length > 0) fetchNames();
+  }, [userGroups]);
   
   const fetchUserGroups = () => {
     getUserGroups()
@@ -53,14 +75,19 @@ const DashboardScreen = () => {
     await auth().signOut();
   };
   
-  // Function to generate random 6-letter uppercase code
-  const generateRandomCode = () => {
-    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    let code = '';
-    for (let i = 0; i < 6; i++) {
-      code += letters.charAt(Math.floor(Math.random() * letters.length));
+  // Function to generate random X-character group ID
+  // This can be adjusted to any length as needed
+  const generateGroupID = (length: number = 15) => {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    const charactersLength = characters.length;
+    
+    for (let i = 0; i < length; i++) {
+      const randomIndex = Math.floor(Math.random() * charactersLength);
+      result += characters[randomIndex];
     }
-    return code;
+    
+    return result;
   };
   
   // Returns an array of group members given a group (Array Implementation without roles)
@@ -82,6 +109,80 @@ const DashboardScreen = () => {
     
     return undefined;
   } 
+  // Handle Join Group with ID
+  
+  const handleJoinGroupWithID = async () => {
+    const currentUser = auth().currentUser;
+    if (!currentUser) {
+      Alert.alert('Error', 'You must be logged in to join a group.');
+      return;
+    }
+    const name = currentUser?.email ? currentUser.email.split('@')[0] : 'anon';
+    if (groupCode.length !== 6) {
+      Alert.alert('Error', 'Group code must be exactly 15 characters.');
+      return;
+    };
+    try {
+      const documentSnapshot = await firestore()
+      .collection('codes')
+      .doc(groupCode)
+      .get()
+      
+      if (documentSnapshot.data() === undefined) {
+        Alert.alert('Error', 'Group Code is not valid');
+        return;
+      }
+      const codeData = documentSnapshot.data();
+      console.log('Code data:', codeData);
+      // Check if codeData and expirationTime
+      if (!codeData || !codeData.expirationTime) {
+        Alert.alert('Error', 'Invalid group code data');
+        return;
+      }
+      // Check if current time is before the expiration time
+      const currentTime = firebase.firestore.Timestamp.now(); // Get current time
+      
+      if (currentTime.toMillis() > codeData.expirationTime.toMillis()) {
+        Alert.alert('Error', 'Group code has expired');
+        return;
+      }
+      // Proceed to join the group
+      const groupId = codeData.groupID;
+      
+      // Use the existing join group logic
+      const documentSnapshotGroup = await firestore()
+      .collection('groups')
+      .doc(groupId)
+      .get();
+      if (documentSnapshotGroup.data() === undefined) {
+        Alert.alert('Error', 'Group does not exist');
+        return;
+      }
+      const groupData = documentSnapshotGroup.data();
+      const members: string[] = groupData?.members ?? [];
+      if (members.includes(name)) {
+        Alert.alert('Info', 'You are already a member of this group.');
+        return; // Stop here, no need to add again
+      }
+      console.log('Group data:', documentSnapshotGroup.data());
+      await firestore()
+      .doc(`groups/${groupId}`)
+      .update({
+        members: firestore.FieldValue.arrayUnion(name),
+        [`roles.${name}`]: 'member',
+      });
+      await addGroupToUser(groupId);
+      fetchUserGroups();
+      // You might want to show a success message or navigate here
+      Alert.alert('Success', 'You have joined the group!');
+      
+    }
+    
+    catch (error) {
+      console.error('Error joining group:', error);
+      Alert.alert('Error', 'An error occurred while trying to join the group.');
+    }
+  };
   
   // Handle Join Button Press
   const handleJoinGroup = async () => {
@@ -109,7 +210,7 @@ const DashboardScreen = () => {
       
       if (members.includes(name)) {
         Alert.alert('Info', 'You are already a member of this group.');
-        return; // Stop here, no need to add again
+        return;
       }
       
       console.log('Group data:', documentSnapshot.data());
@@ -125,7 +226,6 @@ const DashboardScreen = () => {
       
       fetchUserGroups();
       
-      // You might want to show a success message or navigate here
       Alert.alert('Success', 'You have joined the group!');
     } catch (error) {
       console.error('Error joining group:', error);
@@ -180,7 +280,11 @@ const DashboardScreen = () => {
   }
   
   // Handle Create button press
-  const handleCreateGroup = async () => {
+  const handleCreateGroup = () => {
+    setShowGroupNameModal(true);
+  };
+  
+  const actuallyCreateGroup = async (groupName: string) => {
     const currentUser = auth().currentUser;
     if (!currentUser) {
       Alert.alert('Error', 'You must be logged in to create a group.');
@@ -188,30 +292,23 @@ const DashboardScreen = () => {
     }
     const userId = currentUser.uid;
     const emailUsername = currentUser?.email ? currentUser.email.split('@')[0]: 'anon';
-    
-    const newGroupCode = generateRandomCode();
-    
+    const newGroupCode = generateGroupID();
     try {
       await firestore()
-      .collection('groups')
-      .doc(newGroupCode)
-      .set({
-        createdAt: firestore.FieldValue.serverTimestamp(),
-        createdBy: userId,
-        createdByName: emailUsername,
-        members:[emailUsername],
-        roles:{[emailUsername]:"admin"},
-        locations:{[emailUsername]:"admin"},
-      });
-      
-      // Add group to users collection for current user
-      
-      
-      Alert.alert('Success', `Group created with code: ${newGroupCode}`);
-      
+        .collection('groups')
+        .doc(newGroupCode)
+        .set({
+          createdAt: firestore.FieldValue.serverTimestamp(),
+          createdBy: userId,
+          createdByName: emailUsername,
+          name: groupName,
+          members: [emailUsername],
+          roles: { [emailUsername]: 'admin' },
+          locations: { [emailUsername]: 'admin' },
+        });
+      Alert.alert('Success', `Group created`);
       await addGroupToUser(newGroupCode);
       fetchUserGroups();
-      
     } catch (error) {
       console.error('Error creating group:', error);
       Alert.alert('Error', 'Failed to create group.');
@@ -249,6 +346,41 @@ const DashboardScreen = () => {
     <Text style={[styles.buttonText, themeStyles.buttonText]}>Create</Text>
     </TouchableOpacity>
     </View>
+    <Modal
+      visible={showGroupNameModal}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setShowGroupNameModal(false)}
+    >
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)' }}>
+        <View style={{ backgroundColor: isDark ? '#222' : '#fff', padding: 24, borderRadius: 12, width: '80%' }}>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 12, color: isDark ? '#fff' : '#222' }}>Enter Group Name</Text>
+          <TextInput
+            value={newGroupName}
+            onChangeText={setNewGroupName}
+            placeholder="Group Name"
+            placeholderTextColor={isDark ? '#aaa' : '#888'}
+            style={{ borderWidth: 1, borderRadius: 8, padding: 10, marginBottom: 16, color: isDark ? '#fff' : '#222', backgroundColor: isDark ? '#333' : '#fff', borderColor: isDark ? '#444' : '#ccc' }}
+          />
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+            <TouchableOpacity onPress={() => setShowGroupNameModal(false)} style={{ marginRight: 16 }}>
+              <Text style={{ color: isDark ? '#aaa' : '#888' }}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={async () => {
+              if (!newGroupName.trim()) {
+                Alert.alert('Error', 'Please enter a group name.');
+                return;
+              }
+              setShowGroupNameModal(false);
+              await actuallyCreateGroup(newGroupName.trim());
+              setNewGroupName('');
+            }}>
+              <Text style={{ color: isDark ? '#4da6ff' : '#007bff', fontWeight: 'bold' }}>Create</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
     
     {/* Available Groups Box (conditionally rendered) */}
     {userGroups.length > 0 && (
@@ -276,9 +408,9 @@ const DashboardScreen = () => {
             Alert.alert('Error', 'Unable to fetch group members.');
           }
         }}
-        >
-        <Text style={styles.joinButtonText}>{group}</Text>
-        </TouchableOpacity>
+      >
+        <Text style={styles.joinButtonText}>{groupNames[group] || group}</Text>
+      </TouchableOpacity>
       ))}
       </ScrollView>
       </View>
@@ -296,7 +428,7 @@ const DashboardScreen = () => {
     placeholder="ABCDEF"
     placeholderTextColor={isDark ? '#888' : '#aaa'}
     />
-    <TouchableOpacity style={[styles.joinButton, { marginTop: 0 }]} onPress={handleJoinGroup}>
+    <TouchableOpacity style={[styles.joinButton, { marginTop: 0 }]} onPress={handleJoinGroupWithID}>
     <Text style={styles.joinButtonText}>Enter</Text>
     </TouchableOpacity>
     </View>

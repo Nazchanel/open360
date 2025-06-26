@@ -32,7 +32,7 @@ const CreateJoinGroup = () => {
       }]
     }, secretKey);
 
-    await setDoc(doc(db, 'groups', code), { encrypted });
+    await setDoc(doc(db, 'web-groups', code), { encrypted });
     await addGroup(code, user.id);
     setGroupCode(code);
     setShowQR(true);

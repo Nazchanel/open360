@@ -23,7 +23,7 @@ export const useGroups = (groupId?: string) => {
       return;
     }
 
-    const unsubscribe = onSnapshot(doc(db, 'groups', groupId), async (doc) => {
+    const unsubscribe = onSnapshot(doc(db, 'web-groups', groupId), async (doc) => {
       if (doc.exists()) {
         const data = doc.data();
         try {
@@ -49,7 +49,7 @@ export const useGroups = (groupId?: string) => {
   const updateLocation = async (position: [number, number]) => {
     if (!groupId || !auth.currentUser?.uid) return;
     
-    const userRef = doc(db, 'groups', groupId);
+    const userRef = doc(db, 'web-groups', groupId);
     const groupDoc = await getDoc(userRef);
     
     if (!groupDoc.exists()) return;
@@ -98,7 +98,7 @@ export const useGroups = (groupId?: string) => {
   const joinGroup = async (userId: string, username: string) => {
     if (!groupId) return false;
     
-    const userRef = doc(db, 'groups', groupId);
+    const userRef = doc(db, 'web-groups', groupId);
     const groupDoc = await getDoc(userRef);
     
     if (!groupDoc.exists()) return false;

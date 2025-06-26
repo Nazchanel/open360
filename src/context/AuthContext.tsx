@@ -38,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        const docRef = doc(db, 'users', firebaseUser.uid);
+        const docRef = doc(db, 'web-users', firebaseUser.uid);
         const docSnap = await getDoc(docRef);
         
         if (docSnap.exists()) {
@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password
       );
       
-      const docRef = doc(db, 'users', userCredential.user.uid);
+      const docRef = doc(db, 'web-users', userCredential.user.uid);
       const docSnap = await getDoc(docRef);
       
       if (docSnap.exists()) {
@@ -99,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
       
       const encryptedData = encryptData(userData, userCredential.user.uid);
-      await setDoc(doc(db, 'users', userCredential.user.uid), { encryptedData });
+      await setDoc(doc(db, 'web-users', userCredential.user.uid), { encryptedData });
       
       setUser(userData);
       return true;
@@ -127,7 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     try {
       const encryptedData = encryptData(updatedUser, userId);
-      await setDoc(doc(db, 'users', userId), { encryptedData });
+      await setDoc(doc(db, 'web-users', userId), { encryptedData });
       setUser(updatedUser);
     } catch (error) {
       console.error('Error adding group:', error);

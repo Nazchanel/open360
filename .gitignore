@@ -1,3 +1,7 @@
+# Leftovers from react-native
+.bundle
+__tests__
+ios
 
 # Logs
 logs

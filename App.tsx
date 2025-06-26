@@ -8,6 +8,7 @@ import LoginScreen from './src/screens/LoginScreen';
 import SignUpScreen from './src/screens/SignUpScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import MapScreen from './src/screens/MapScreen';
+import UserSettingsScreen from './src/screens/UserSettingsScreen';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -18,6 +19,7 @@ export type RootStackParamList = {
     groupName: string;
     members: string[];
   };
+  UserSettings: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -50,6 +52,7 @@ const App = () => {
       <>
       <Stack.Screen name="Dashboard" component={DashboardScreen} />
       <Stack.Screen name="Map" component={MapScreen} />
+      <Stack.Screen name="UserSettings" component={UserSettingsScreen} />
       </>
     ) : (
       <>

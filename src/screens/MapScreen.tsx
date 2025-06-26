@@ -29,12 +29,12 @@ type MapScreenRouteProp = RouteProp<RootStackParamList, 'Map'>;
 interface MemberLocation {
   geopoint?: { latitude: number; longitude: number };
   timestamp?: { toDate: () => Date };
-  icon?: string; // add icon property
+  icon?: string;
 }
 
 const MapScreen = () => {
   const route = useRoute<MapScreenRouteProp>();
-  const { username, groupName, members } = route.params;
+  const { username, groupName: groupID, members } = route.params;
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   
   const [location, setLocation] = useState<LatLng>({ lat: 0, lng: 0 });
@@ -57,7 +57,8 @@ const MapScreen = () => {
   const [showJoinCodePanel, setShowJoinCodePanel] = useState(false);
   const [joinCodeTime, setJoinCodeTime] = useState('');
   const [joinCodeUnit, setJoinCodeUnit] = useState<'minutes' | 'hours'>('minutes');
-  const emojiOptions = ['😀','😎','🦄','🚀','🐱','🐶','🍕','🌟','🎸','🏀','🚗','🎮','🎲','🎯','🎹','📚','🧩','🍔','🍦','🏝️','🧑‍💻','🦊','🐼','🐸','🐵','🦁','🐯','🐨','🐻','🐷','🐸','🐔','🐧','🐦','🐤','🐣','🐥','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🐛','🦋','🐌','🐞','🐜','🦟','🦗','🕷️','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐅','🐆','🦓','🦍','🦧','🐘','🦛','🦏','🐪','🐫','🦒','🦘','🦬','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐕‍🦺','🐈','🐓','🦃','🦤','🦚','🦜','🦢','🦩','🕊️','🐇','🦝','🦨','🦡','🦫','🦦','🦥','🐁','🐀','🐿️','🦔'];
+  const [activeCodes, setActiveCodes] = useState<string[]>([]);
+  const emojiOptions = ['😀', '😎', '🦄', '🚀', '🐱', '🐶', '🍕', '🌟', '🎸', '🏀', '🚗', '🎮', '🎲', '🎯', '🎹', '📚', '🧩', '🍔', '🍦', '🏝️', '🧑‍💻', '🦊', '🐼', '🐸', '🐵', '🦁', '🐯', '🐨', '🐻', '🐷', '🐸', '🐔', '🐧', '🐦', '🐤', '🐣', '🐥', '🦆', '🦅', '🦉', '🦇', '🐺', '🐗', '🐴', '🦄', '🐝', '🐛', '🦋', '🐌', '🐞', '🐜', '🦟', '🦗', '🕷️', '🦂', '🐢', '🐍', '🦎', '🦖', '🦕', '🐙', '🦑', '🦐', '🦞', '🦀', '🐡', '🐠', '🐟', '🐬', '🐳', '🐋', '🦈', '🐊', '🐅', '🐆', '🦓', '🦍', '🦧', '🐘', '🦛', '🦏', '🐪', '🐫', '🦒', '🦘', '🦬', '🐃', '🐂', '🐄', '🐎', '🐖', '🐏', '🐑', '🦙', '🐐', '🦌', '🐕', '🐩', '🦮', '🐕‍🦺', '🐈', '🐓', '🦃', '🦤', '🦚', '🦜', '🦢', '🦩', '🕊️', '🐇', '🦝', '🦨', '🦡', '🦫', '🦦', '🦥', '🐁', '🐀', '🐿️', '🦔'];
   
   const panelPanResponder = useRef(
     PanResponder.create({
@@ -72,7 +73,55 @@ const MapScreen = () => {
       },
     })
   ).current;
+
+const deleteCodes = async (groupID: string, deleteGroup: boolean = false) => {
+  try {
+    const groupDoc = await firestore().collection('groups').doc(groupID).get();
+    const activeCodes = groupDoc.get('activeCodes');
+
+    if (Array.isArray(activeCodes)) {
+      for (const code of activeCodes) {
+        const codeStr = code?.toString();
+        const codeDoc = await firestore().collection('codes').doc(codeStr).get();
+        const data = codeDoc.data();
+
+        if (data && data.expirationTime) {
+          if (deleteGroup) { // Deletes all codes (CALLED WHEN DELETING GROUP)
+            // Delete the code document
+            await firestore().collection('codes').doc(codeStr).delete();
+            console.log(`Code ${codeStr} deleted.`);
+          } else {
+            const expirationTime: Date = data.expirationTime.toDate();
+            const now = new Date();
+
+            if (expirationTime <= now) {
+              console.log(`Code ${codeStr} is expired. Deleting...`);
+
+              await firestore().collection('groups').doc(groupID).update({
+                activeCodes: firestore.FieldValue.arrayRemove(codeStr)
+              });
+
+              await firestore().collection('codes').doc(codeStr).delete();
+              console.log(`Code ${codeStr} deleted.`);
+            } else {
+              console.log(`Code ${codeStr} is not expired.`);
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Failed to delete expired codes:', err);
+  }
+};
+
   
+  // Cleanse Active Codes
+  useEffect(() => {
+    deleteCodes(groupID);
+  }, [groupID]);
+  
+  // Animate the member panel open/close
   useEffect(() => {
     Animated.timing(panelAnim, {
       toValue: panelOpen ? 0 : -200,
@@ -82,6 +131,7 @@ const MapScreen = () => {
     }).start();
   }, [panelOpen]);
   
+  // Animate the settings panel open/close
   useEffect(() => {
     Animated.timing(settingsAnim, {
       toValue: settingsOpen ? settingsOpenX : settingsClosedX,
@@ -91,6 +141,7 @@ const MapScreen = () => {
     }).start();
   }, [settingsOpen]);
   
+  // Handle Android hardware back button to close settings panel
   useEffect(() => {
     if (!settingsOpen) return;
     const onBack = () => {
@@ -101,17 +152,18 @@ const MapScreen = () => {
     return () => sub.remove();
   }, [settingsOpen]);
   
+  // Fetch the user's emoji icon from Firestore
   useEffect(() => {
     const fetchMyEmoji = async () => {
-      const doc = await firestore().collection('groups').doc(groupName).get();
+      const doc = await firestore().collection('groups').doc(groupID).get();
       const icons = (doc.get('icons') || {}) as Record<string, string>;
       if (icons && typeof icons === 'object' && icons[username]) setMyEmoji(icons[username]);
     };
     fetchMyEmoji();
-  }, [groupName, username]);
+  }, [groupID, username]);
   
   const saveMyEmoji = async (emoji: string) => {
-    await firestore().collection('groups').doc(groupName).set({
+    await firestore().collection('groups').doc(groupID).set({
       icons: { [username]: emoji }
     }, { merge: true });
     setMyEmoji(emoji);
@@ -133,7 +185,7 @@ const MapScreen = () => {
         const m1 = adjustedMarkers[i];
         const m2 = adjustedMarkers[j];
         
-        if (Math.abs(m1.position.lat - m2.position.lat) < MIN_DISTANCE && 
+        if (Math.abs(m1.position.lat - m2.position.lat) < MIN_DISTANCE &&
         Math.abs(m1.position.lng - m2.position.lng) < MIN_DISTANCE) {
           // Add small offsets to make them distinct
           adjustedMarkers[j].position = {
@@ -185,19 +237,12 @@ const MapScreen = () => {
       return adjustClosePositions(markers);
     };
     
-    const hasMovedSignificantly = (loc1: LatLng | null, loc2: LatLng, threshold = 0.0001) => {
-      if (!loc1) return true;
-      const latDiff = Math.abs(loc1.lat - loc2.lat);
-      const lngDiff = Math.abs(loc1.lng - loc2.lng);
-      return latDiff > threshold || lngDiff > threshold;
-    };
-    
     const saveLocationToFirestore = async (lat: number, lng: number) => {
       try {
         const geopoint = new firestore.GeoPoint(lat, lng);
         await firestore()
         .collection('groups')
-        .doc(groupName)
+        .doc(groupID)
         .set(
           {
             locations: {
@@ -267,6 +312,7 @@ const MapScreen = () => {
       );
     };
     
+    // Request location permission and start watching location
     useEffect(() => {
       const requestLocationPermission = async () => {
         if (Platform.OS === 'android') {
@@ -285,9 +331,7 @@ const MapScreen = () => {
             return;
           }
         }
-        
         getCurrentLocation();
-        
         watchId.current = Geolocation.watchPosition(
           position => {
             const loc = {
@@ -303,9 +347,7 @@ const MapScreen = () => {
           { enableHighAccuracy: true, distanceFilter: 0, interval: 5000, fastestInterval: 5000 }
         );
       };
-      
       requestLocationPermission();
-      
       return () => {
         if (watchId.current !== null) {
           Geolocation.clearWatch(watchId.current);
@@ -313,23 +355,22 @@ const MapScreen = () => {
       };
     }, []);
     
+    // Fetch group member locations from Firestore every 3 seconds
     useEffect(() => {
       const fetchLocations = async () => {
-        const locations = await getGroupLocations(groupName);
+        const locations = await getGroupLocations(groupID);
         setMemberLocations(locations);
       };
-      
       fetchLocations();
       const intervalId = setInterval(fetchLocations, 3000);
-      
       return () => clearInterval(intervalId);
-    }, [groupName]);
+    }, [groupID]);
     
     // Fetch and log group roles only once
     useEffect(() => {
       const fetchRoles = async () => {
         try {
-          const doc = await firestore().collection('groups').doc(groupName).get();
+          const doc = await firestore().collection('groups').doc(groupID).get();
           const roles = doc.get('roles');
           console.log('Group roles:', roles);
         } catch (err) {
@@ -337,13 +378,13 @@ const MapScreen = () => {
         }
       };
       fetchRoles();
-    }, [groupName]);
+    }, [groupID]);
     
     // Fetch and store user role
     useEffect(() => {
       const fetchRole = async () => {
         try {
-          const doc = await firestore().collection('groups').doc(groupName).get();
+          const doc = await firestore().collection('groups').doc(groupID).get();
           const rolesRaw = doc.get('roles') || {};
           const roles: Record<string, string> = (rolesRaw && typeof rolesRaw === 'object' && !Array.isArray(rolesRaw)) ? rolesRaw as Record<string, string> : {};
           setUserRole(roles[username] || null);
@@ -352,14 +393,14 @@ const MapScreen = () => {
         }
       };
       fetchRole();
-    }, [groupName, username]);
+    }, [groupID, username]);
     
-    // Fetch roles for admin panel
+    // Fetch roles for admin panel when admin panel is shown
     const [allRoles, setAllRoles] = useState<Record<string, string>>({});
     useEffect(() => {
       const fetchAllRoles = async () => {
         try {
-          const doc = await firestore().collection('groups').doc(groupName).get();
+          const doc = await firestore().collection('groups').doc(groupID).get();
           const rolesRaw = doc.get('roles') || {};
           const roles: Record<string, string> = (rolesRaw && typeof rolesRaw === 'object' && !Array.isArray(rolesRaw)) ? rolesRaw as Record<string, string> : {};
           setAllRoles(roles);
@@ -368,12 +409,12 @@ const MapScreen = () => {
         }
       };
       if (showAdminPanel) fetchAllRoles();
-    }, [groupName, showAdminPanel]);
+    }, [groupID, showAdminPanel]);
     
     const handleRemoveMember = async (member: string) => {
       try {
         // Remove member from group document
-        await firestore().collection('groups').doc(groupName).update({
+        await firestore().collection('groups').doc(groupID).update({
           members: firestore.FieldValue.arrayRemove(member),
           [`locations.${member}`]: firestore.FieldValue.delete(),
           [`roles.${member}`]: firestore.FieldValue.delete(),
@@ -382,7 +423,7 @@ const MapScreen = () => {
         
         // Remove group from user's document in users collection
         await firestore().collection('users').doc(member).update({
-          groups: firestore.FieldValue.arrayRemove(groupName),
+          groups: firestore.FieldValue.arrayRemove(groupID),
         });
         
         setAllRoles(prev => {
@@ -404,7 +445,7 @@ const MapScreen = () => {
     
     const handlePromoteMember = async (member: string) => {
       try {
-        await firestore().collection('groups').doc(groupName).update({
+        await firestore().collection('groups').doc(groupID).update({
           [`roles.${member}`]: 'admin',
         });
         setAllRoles(prev => ({ ...prev, [member]: 'admin' }));
@@ -418,13 +459,17 @@ const MapScreen = () => {
         const membersToRemove = Object.keys(allRoles);
         for (const member of membersToRemove) {
           await firestore().collection('users').doc(member).update({
-            groups: firestore.FieldValue.arrayRemove(groupName),
+            groups: firestore.FieldValue.arrayRemove(groupID),
           });
         }
-        await firestore().collection('groups').doc(groupName).delete();
+        // Deletes all associated codes
+        await deleteCodes(groupID, true);
+
+        await firestore().collection('groups').doc(groupID).delete();
+        
         setShowAdminPanel(false);
         setSettingsOpen(false);
-        navigation.replace('Dashboard');
+        navigation.navigate('Dashboard');
       } catch (err) {
         console.error('Failed to delete group:', err);
       }
@@ -433,7 +478,7 @@ const MapScreen = () => {
     const handleLeaveGroup = async () => {
       try {
         // Fetch latest roles
-        const doc = await firestore().collection('groups').doc(groupName).get();
+        const doc = await firestore().collection('groups').doc(groupID).get();
         const rolesRaw = doc.get('roles') || {};
         const roles: Record<string, string> = (rolesRaw && typeof rolesRaw === 'object' && !Array.isArray(rolesRaw)) ? rolesRaw as Record<string, string> : {};
         const adminCount = Object.values(roles).filter(role => role === 'admin').length;
@@ -442,7 +487,7 @@ const MapScreen = () => {
           return;
         }
         // Remove self from group document
-        await firestore().collection('groups').doc(groupName).update({
+        await firestore().collection('groups').doc(groupID).update({
           members: firestore.FieldValue.arrayRemove(username),
           [`locations.${username}`]: firestore.FieldValue.delete(),
           [`roles.${username}`]: firestore.FieldValue.delete(),
@@ -450,7 +495,7 @@ const MapScreen = () => {
         });
         // Remove group from user's document in users collection
         await firestore().collection('users').doc(username).update({
-          groups: firestore.FieldValue.arrayRemove(groupName),
+          groups: firestore.FieldValue.arrayRemove(groupID),
         });
         navigation.replace('Dashboard');
       } catch (err) {
@@ -510,6 +555,28 @@ const MapScreen = () => {
       }
     };
     
+    // Move fetchActiveCodes outside useEffect so it can be reused
+    const fetchActiveCodes = async () => {
+      try {
+        const doc = await firestore().collection('groups').doc(groupID).get();
+        const codes = doc.get('activeCodes');
+        if (Array.isArray(codes)) {
+          setActiveCodes(codes.filter((c): c is string => typeof c === 'string'));
+        } else {
+          setActiveCodes([]);
+        }
+      } catch (err) {
+        setActiveCodes([]);
+      }
+    };
+    
+    // Fetch active codes when settings panel or join code panel is opened
+    useEffect(() => {
+      if (settingsOpen && showJoinCodePanel) {
+        fetchActiveCodes();
+      }
+    }, [settingsOpen, showJoinCodePanel, groupID]);
+    
     const handleGenerateJoinCode = async () => {
       // Validate input
       const num = parseInt(joinCodeTime, 10);
@@ -530,21 +597,41 @@ const MapScreen = () => {
         expiration.setHours(now.getHours() + num);
       }
       try {
-        
         await firestore().collection('codes').doc(code).set({
           expirationTime: firestore.Timestamp.fromDate(expiration),
-          groupID: groupName,
+          groupID: groupID,
         });
-        // Append code to activeCodes array in the group document
-        await firestore().collection('groups').doc(groupName).update({
+        await firestore().collection('groups').doc(groupID).update({
           activeCodes: firestore.FieldValue.arrayUnion(code),
         });
         Alert.alert('Join Code Generated', `Code: ${code}`);
+        // Fetch and update the active codes list after generating a new code
+        fetchActiveCodes();
       } catch (err) {
         Alert.alert('Error', 'Failed to generate join code.');
         console.error('Failed to generate join code:', err);
       }
     };
+    
+    // Fetch active codes when settings panel or join code panel is opened
+    useEffect(() => {
+      const fetchActiveCodes = async () => {
+        try {
+          const doc = await firestore().collection('groups').doc(groupID).get();
+          const codes = doc.get('activeCodes');
+          if (Array.isArray(codes)) {
+            setActiveCodes(codes.filter((c): c is string => typeof c === 'string'));
+          } else {
+            setActiveCodes([]);
+          }
+        } catch (err) {
+          setActiveCodes([]);
+        }
+      };
+      if (settingsOpen && showJoinCodePanel) {
+        fetchActiveCodes();
+      }
+    }, [settingsOpen, showJoinCodePanel, groupID]);
     
     return (
       <View style={{ flex: 1 }}>
@@ -556,7 +643,7 @@ const MapScreen = () => {
         </Text>
         </View>
       )}
-      <LeafletView 
+      <LeafletView
       mapCenterPosition={mapCenter || getLastKnownLocation()}
       mapMarkers={getMapMarkers()}
       zoom={zoom}
@@ -575,7 +662,7 @@ const MapScreen = () => {
       <Animated.View
       style={[styles.membersPanel, colorScheme === 'dark' && { backgroundColor: '#000' }, { transform: [{ translateX: panelAnim }] }]}
       {...panelPanResponder.panHandlers}
-      > 
+      >
       {/* Close button inside panel when open */}
       {panelOpen && (
         <TouchableOpacity
@@ -617,7 +704,7 @@ const MapScreen = () => {
             <Text style={[styles.coordText, colorScheme === 'dark' && { color: '#ccc' }]}>Location unknown</Text>
           )}
           {time instanceof Date && !isNaN(time.getTime()) ? (
-            <Text style={[styles.timeText, colorScheme === 'dark' && { color: '#aaa' }]}> 
+            <Text style={[styles.timeText, colorScheme === 'dark' && { color: '#aaa' }]}>
             {time.toLocaleDateString()} {time.toLocaleTimeString()}
             </Text>
           ) : (
@@ -724,6 +811,23 @@ const MapScreen = () => {
           >
           <Text style={{ color: '#fff', fontWeight: '600', fontSize: 16 }}>Generate</Text>
           </TouchableOpacity>
+          {/* Display active codes below the generate button */}
+          <View style={{ marginTop: 24 }}>
+          <Text style={{ fontWeight: 'bold', color: colorScheme === 'dark' ? '#fff' : '#222', marginBottom: 6 }}>
+          Active Join Codes:
+          </Text>
+          {activeCodes.length === 0 ? (
+            <Text style={{ color: colorScheme === 'dark' ? '#aaa' : '#888', fontSize: 14 }}>
+            No active codes.
+            </Text>
+          ) : (
+            activeCodes.map((code, idx) => (
+              <Text key={idx} style={{ color: colorScheme === 'dark' ? '#fff' : '#333', fontSize: 15, marginBottom: 2 }}>
+              {code}
+              </Text>
+            ))
+          )}
+          </View>
           </>
         ) : !showEmojiPanel && !showAdminPanel ? (
           <>
@@ -770,7 +874,12 @@ const MapScreen = () => {
           <Text style={{ color: colorScheme === 'dark' ? '#fff' : '#333', fontSize: 16 }}>← Back</Text>
           </TouchableOpacity>
           <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 12, color: colorScheme === 'dark' ? '#fff' : '#222' }}>Admin Panel</Text>
-          <ScrollView style={{ maxHeight: 300 }}>
+          <ScrollView
+          style={{ maxHeight: 300 }}
+          contentContainerStyle={{ paddingBottom: 60, minHeight: 300 }}
+          showsVerticalScrollIndicator={true}
+          keyboardShouldPersistTaps="handled"
+          >
           {Object.entries(allRoles).filter(([name, role]) => role === 'member').map(([name]) => (
             <View key={name} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10, justifyContent: 'space-between' }}>
             <Text style={{ color: colorScheme === 'dark' ? '#fff' : '#222', fontSize: 16 }}>{name}</Text>
@@ -839,10 +948,10 @@ const MapScreen = () => {
   };
   
   const styles = StyleSheet.create({
-    loadingContainer: { 
-      flex: 1, 
-      justifyContent: 'center', 
-      alignItems: 'center' 
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center'
     },
     button: {
       position: 'absolute',
@@ -854,10 +963,10 @@ const MapScreen = () => {
       borderRadius: 25,
       elevation: 4,
     },
-    buttonText: { 
-      color: 'white', 
-      fontWeight: '600', 
-      fontSize: 14 
+    buttonText: {
+      color: 'white',
+      fontWeight: '600',
+      fontSize: 14
     },
     headerContainer: {
       position: 'absolute',

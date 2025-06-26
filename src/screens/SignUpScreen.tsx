@@ -22,7 +22,7 @@ const SignUpScreen: React.FC<Props> = ({ navigation }) => {
   const styles = createStyles(isDarkMode);
   
   const handleSignUp = async () => {
-    const email = username.trimStart().trimEnd + "@open360.com";
+    const email = username.trimStart().trimEnd() + "@open360.com";
     try {
       await auth().createUserWithEmailAndPassword(email, password);
       await firestore()

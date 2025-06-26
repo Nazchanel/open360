@@ -10,7 +10,8 @@ import {
   Platform,
   Alert,
   ScrollView,
-  Modal
+  Modal,
+  RefreshControl
 } from 'react-native';
 import auth, { firebase } from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
@@ -28,6 +29,7 @@ const DashboardScreen = () => {
   
   const [showGroupNameModal, setShowGroupNameModal] = React.useState(false);
   const [newGroupName, setNewGroupName] = React.useState('');
+  const [refreshing, setRefreshing] = React.useState(false);
 
   React.useEffect(() => {
     fetchUserGroups();
@@ -315,6 +317,12 @@ const DashboardScreen = () => {
     }
   };
   
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchUserGroups();
+    setRefreshing(false);
+  };
+  
   const themeStyles = isDark ? darkTheme : lightTheme;
   
   return (
@@ -325,15 +333,36 @@ const DashboardScreen = () => {
     <ScrollView
     contentContainerStyle={{ paddingBottom: 90, paddingTop: 24 }} // more top padding
     keyboardShouldPersistTaps="handled"
+    refreshControl={
+      <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={isDark ? '#fff' : '#333'} />
+    }
     >
     {/* Header Row */}
     <View style={styles.headerContainer}>
-    <Text style={[styles.header, themeStyles.title]}>
-    Hello, {auth().currentUser?.email?.split('@')[0] || 'User'}
-    </Text>
-    <TouchableOpacity onPress={handleLogout} style={styles.logoutBtnTop}>
-    <Text style={styles.logoutText}>Logout</Text>
-    </TouchableOpacity>
+      <Text style={[styles.header, themeStyles.title]}>
+        Hello, {auth().currentUser?.email?.split('@')[0] || 'User'}
+      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        {/* Small User Settings button to the left of Logout */}
+        <TouchableOpacity
+          style={{
+            backgroundColor: '#888',
+            paddingVertical: 6,
+            paddingHorizontal: 10,
+            borderRadius: 8,
+            marginRight: 8,
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: 36,
+          }}
+          onPress={() => navigation.navigate('UserSettings')}
+        >
+          <Text style={{ color: '#fff', fontSize: 13, fontWeight: 'bold' }}>User Settings</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={handleLogout} style={styles.logoutBtnTop}>
+          <Text style={styles.logoutText}>Logout</Text>
+        </TouchableOpacity>
+      </View>
     </View>
     
     {/* Create Group Box */}
